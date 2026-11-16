@@ -49,8 +49,8 @@ const state = {
   confirm: null,
   // The link whose "Update link" form is open (by key, which survives re-checks).
   editing: null,
-  // Whether the working links are listed (the Working tile toggles them).
-  showWorking: false,
+  // Which list the Broken / Working tabs show.
+  view: 'broken',
   undo: null,
   hold: null,
   error: null,
@@ -595,13 +595,16 @@ function verdict(c) {
   return { cls: 'ok', title: `All links look good${on}`, text: 'Safe to publish.' };
 }
 
+/** The Broken / Working tabs, with their counts. */
 function stats(c) {
   const broken = c.error + c.warning + c.unknown;
-  return `<div class="lr-stats">
-    <div class="lr-stat lr-error${broken ? '' : ' lr-zero'}"><span>Broken</span><strong>${broken}</strong></div>
-    <button type="button" class="lr-stat lr-ok${c.ok ? '' : ' lr-zero'}" data-action="toggle-working" aria-expanded="${state.showWorking}"${c.ok ? '' : ' disabled'}>
-      <span>Working</span><strong>${c.ok}</strong><em>${state.showWorking ? 'Hide' : 'Show'}</em>
-    </button>
+  const tab = (view, cls, label, n) => `
+    <button type="button" role="tab" class="lr-stat lr-${cls}${n ? '' : ' lr-zero'}" data-view="${view}" aria-selected="${state.view === view}">
+      <span>${label}</span><strong>${n}</strong>
+    </button>`;
+  return `<div class="lr-stats" role="tablist" aria-label="Links">
+    ${tab('broken', 'error', 'Broken', broken)}
+    ${tab('working', 'ok', 'Working', c.ok)}
   </div>`;
 }
 
@@ -610,7 +613,7 @@ function workingList() {
   const links = visibleLinks()
     .filter((l) => resultFor(l)?.severity === 'ok')
     .sort((a, b) => b.pages.length - a.pages.length || a.href.localeCompare(b.href));
-  if (!links.length) return '';
+  if (!links.length) return '<p class="lr-empty-line">No working links found.</p>';
   const rows = links.map((l) => `
     <li>
       <p class="lr-text">${esc(l.text || '(no link text)')}</p>
@@ -892,7 +895,8 @@ function renderPanel() {
   const scanning = !ready && state.scans[state.scope]?.status !== 'error';
   const toFix = c.error + c.warning + c.unknown;
   let body = '';
-  if (checked) body = (toFix ? groupedList() : allGood(c)) + (state.showWorking ? workingList() : '');
+  if (checked && state.view === 'working') body = workingList();
+  else if (checked) body = toFix ? groupedList() : allGood(c);
   else if (scanning || c.pending || (state.scope === 'page' && !state.pageHtml)) body = skeleton();
   app.innerHTML = `
     ${header(!state.busy && !c.pending && !scanning)}
@@ -912,7 +916,7 @@ function renderPanel() {
     ${checked ? stats(c) : ''}
     ${scanNotes()}
     ${confirmBar()}
-    ${bulk.length > 1 && !state.confirm ? `<button type="button" class="lr-btn primary lr-bulk" data-action="bulk"${state.busy || !state.editable ? ' disabled' : ''}>Apply ${bulk.length} safe fixes</button>` : ''}
+    ${bulk.length > 1 && !state.confirm && state.view === 'broken' ? `<button type="button" class="lr-btn primary lr-bulk" data-action="bulk"${state.busy || !state.editable ? ' disabled' : ''}>Apply ${bulk.length} safe fixes</button>` : ''}
     ${body}`;
 }
 
@@ -935,12 +939,14 @@ app.addEventListener('click', (e) => {
     setScope(scope.dataset.scope);
     return;
   }
+  const view = e.target.closest('[data-view]');
+  if (view) {
+    state.view = view.dataset.view;
+    render();
+    return;
+  }
   const action = e.target.closest('[data-action]')?.dataset.action;
   if (action === 'recheck') recheck();
-  if (action === 'toggle-working') {
-    state.showWorking = !state.showWorking;
-    render();
-  }
   if (action === 'pick-open') openPicker();
   if (action === 'pick-check') checkPicked();
   if (action === 'pick-cancel') {

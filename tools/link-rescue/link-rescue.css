@@ -435,29 +435,26 @@ a {
   opacity: 0.5;
 }
 
-/* The Working tile shows and hides the working links. */
+/* The tiles are tabs: Broken / Working */
 button.lr-stat {
+  position: relative;
   cursor: pointer;
 }
 
-button.lr-stat:hover:not(:disabled) {
+button.lr-stat:hover {
+  border-color: var(--tone);
+}
+
+button.lr-stat[aria-selected="true"] {
   border-color: var(--tone);
   background: var(--tone-bg);
+  box-shadow: inset 0 -3px 0 var(--tone);
 }
 
-button.lr-stat:disabled {
-  cursor: default;
-}
-
-button.lr-stat em {
-  color: var(--lr-accent);
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 700;
-}
-
-button.lr-stat:disabled em {
-  visibility: hidden;
+.lr-empty-line {
+  margin: 4px 0;
+  color: var(--lr-muted);
+  text-align: center;
 }
 
 .lr-working {
