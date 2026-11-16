@@ -36,7 +36,7 @@ function yearsAgo(years) {
  * @returns {Promise<{url: string, date: Date|null, timestamp: string}|null>}
  *   The snapshot, or null when the page was never archived
  */
-export async function findSnapshot(url) {
+export default async function findSnapshot(url) {
   if (cache.has(url)) return cache.get(url);
   const run = (async () => {
     let snap;
@@ -58,9 +58,4 @@ export async function findSnapshot(url) {
   cache.set(url, run);
   run.catch(() => cache.delete(url));
   return run;
-}
-
-/** The page where anyone can ask the Wayback Machine to save a copy now. */
-export function saveNowUrl(url) {
-  return `https://web.archive.org/save/${url}`;
 }

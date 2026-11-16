@@ -9,16 +9,12 @@ import DA_SDK from 'https://da.live/nx/utils/sdk.js';
 import { extractLinks, toWebPath } from './lib/links.js';
 import { checkLink, formatDate } from './lib/checks.js';
 import { applyChange, reverseChange } from './lib/fixes.js';
-import { saveNowUrl } from './lib/wayback.js';
 import {
   listPages, sourceUrl, folderOf, MAX_PAGES,
 } from './lib/site.js';
 
 const SDK_TIMEOUT = 4000;
 const CONCURRENCY = 4;
-const ORDER = {
-  error: 0, warning: 1, unknown: 2, ok: 3, skip: 4,
-};
 // After a fix, the editor can briefly send the old page before it picks up the change.
 const HOLD_MS = 6000;
 const DEMO_PAGES = {
@@ -36,11 +32,9 @@ const state = {
   scans: { folder: null, site: null },
   links: [],
   results: new Map(),
-  filter: 'attention',
   editable: true,
   busy: false,
   confirm: null,
-  fixed: [],
   undo: null,
   hold: null,
   error: null,
@@ -264,7 +258,6 @@ function setScope(scope) {
   if (scope === state.scope) return;
   state.scope = scope;
   state.confirm = null;
-  state.filter = 'attention';
   if (scope !== 'page' && !state.scans[scope]) scan(scope);
   rebuild();
 }
@@ -355,14 +348,6 @@ async function applyFixes(items) {
     }
     state.hold = { until: Date.now() + HOLD_MS, hrefs: items.map((i) => i.link.href) };
     state.undo = undo;
-    items.forEach(({ link, suggestion }) => {
-      const pages = undo.filter((u) => u.done.some((d) => d.link.key === link.key)).length;
-      if (pages) {
-        state.fixed.unshift({
-          key: link.key, from: link.href, to: suggestion.to, type: suggestion.type, pages,
-        });
-      }
-    });
     rebuild();
     const where = undo.length > 1 ? ` on ${plural(undo.length, 'page')}` : '';
     const problem = failed.length ? ` ${plural(failed.length, 'page')} couldn't be saved.` : '';
@@ -396,8 +381,6 @@ async function undoLast() {
       await writePage(entry.path, html);
       storePage(entry.path, html);
     }
-    const undone = new Set(undo.flatMap((u) => u.done.map((d) => d.link.key)));
-    state.fixed = state.fixed.filter((f) => !undone.has(f.key));
     state.undo = null;
     state.hold = null;
     rebuild();
@@ -421,6 +404,28 @@ function bulkItems() {
 
 /* ---------- rendering ---------- */
 
+const ICONS = {
+  refresh: '<path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.5v3h-3"/>',
+  error: '<circle cx="8" cy="8" r="6.5"/><path d="M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4"/>',
+  warning: '<path d="M8 2l6.5 11.5h-13z"/><path d="M8 6.5v3M8 11.6v.1"/>',
+  unknown: '<circle cx="8" cy="8" r="6.5"/><path d="M6.3 6.3a1.8 1.8 0 1 1 2.4 1.7c-.5.2-.7.6-.7 1.1M8 11.6v.1"/>',
+  ok: '<circle cx="8" cy="8" r="6.5"/><path d="M5.2 8.2l2 2 3.6-4"/>',
+  pending: '<circle cx="8" cy="8" r="6.5" stroke-dasharray="3 3"/>',
+  external: '<path d="M9.5 2.5h4v4M13.5 2.5L7.5 8.5M11.5 9v4.5h-9v-9H7"/>',
+  page: '<path d="M4 1.5h5l3 3v10H4z"/><path d="M9 1.5v3h3"/>',
+  info: '<circle cx="8" cy="8" r="6.5"/><path d="M8 7.2v4M8 4.6v.1"/>',
+};
+
+function icon(name, cls = '') {
+  return `<svg class="lr-icon ${cls}" viewBox="0 0 16 16" aria-hidden="true">${ICONS[name]}</svg>`;
+}
+
+const GROUPS = [
+  { severity: 'error', title: 'Broken', hint: 'Readers hit a dead end' },
+  { severity: 'warning', title: 'Outdated', hint: 'Work for now, but should be updated' },
+  { severity: 'unknown', title: 'Not confirmed', hint: 'Open these once to check them' },
+];
+
 function counts() {
   const c = {
     error: 0, warning: 0, ok: 0, pending: 0, unknown: 0, skip: 0,
@@ -443,49 +448,43 @@ function verdict(c) {
   const run = state.scans[state.scope];
   if (state.scope !== 'page' && run?.status !== 'done') {
     if (run?.status === 'error') return { cls: 'error', title: 'The scan stopped', text: run.error };
-    if (run?.status === 'reading') return { cls: 'pending', title: `Reading pages… ${run.read} of ${run.total}`, progress: run.read / Math.max(run.total, 1) };
-    return { cls: 'pending', title: `Finding pages… ${run?.found || 0} so far`, text: '' };
+    if (run?.status === 'reading') {
+      return {
+        cls: 'pending', title: 'Reading pages…', text: `${run.read} of ${run.total}`, progress: run.read / Math.max(run.total, 1),
+      };
+    }
+    return { cls: 'pending', title: 'Finding pages…', text: `${run?.found || 0} so far` };
   }
-  if (!state.links.length && state.scope === 'page' && !state.pageHtml) return { cls: 'pending', title: 'Reading the page…', text: '' };
-  if (!state.links.length) return { cls: 'ok', title: `No links on ${scopeName()}`, text: '' };
+  if (!state.links.length && state.scope === 'page' && !state.pageHtml) return { cls: 'pending', title: 'Reading the page…' };
+  if (!state.links.length) return { cls: 'ok', title: 'No links yet', text: `There are no links on ${scopeName()}.` };
   if (c.pending) {
     const done = state.links.length - c.pending;
-    return { cls: 'pending', title: `Checking links… ${done} of ${state.links.length}`, progress: done / state.links.length };
+    return {
+      cls: 'pending', title: 'Checking links…', text: `${done} of ${state.links.length}`, progress: done / state.links.length,
+    };
   }
   const on = state.scope === 'page' ? '' : ` across ${scopeName()}`;
-  const unconfirmed = c.unknown ? `${plural(c.unknown, 'link')} couldn't be confirmed.` : '';
-  if (c.error) {
-    return {
-      cls: 'error',
-      title: `${plural(c.error, 'broken link')}${on}: fix before you publish`,
-      text: [c.warning ? `${c.warning} more could be better.` : '', unconfirmed].filter(Boolean).join(' '),
-    };
-  }
-  if (c.warning) {
-    return {
-      cls: 'warning',
-      title: `No broken links found${on}. A few could be better`,
-      text: [`${c.warning} to review.`, unconfirmed].filter(Boolean).join(' '),
-    };
-  }
-  if (c.unknown) {
-    return {
-      cls: 'warning',
-      title: `${plural(c.unknown, 'link')}${on} couldn't be confirmed`,
-      text: 'Those sites hide page status from the browser. Open each one once to make sure it works.',
-    };
-  }
-  return { cls: 'ok', title: `All links look good${on}. Safe to publish`, text: `${plural(c.ok, 'link')} checked.` };
+  if (c.error) return { cls: 'error', title: `${plural(c.error, 'broken link')}${on}`, text: 'Fix them before you publish.' };
+  if (c.warning) return { cls: 'warning', title: `No broken links${on}`, text: `${plural(c.warning, 'link')} could be better.` };
+  if (c.unknown) return { cls: 'unknown', title: `No broken links found${on}`, text: `${plural(c.unknown, 'link')} couldn't be confirmed. Open them once to check.` };
+  return { cls: 'ok', title: `All links look good${on}`, text: 'Safe to publish.' };
 }
 
-function archiveLine(res, link) {
-  if (res.snapshot) {
-    return `<p class="lr-archive"><span class="lr-wb" aria-hidden="true"></span>Archived ${esc(formatDate(res.snapshot.date))} · <a href="${esc(res.snapshot.url)}" target="_blank" rel="noopener">View copy</a></p>`;
-  }
-  if (res.noArchive) {
-    return `<p class="lr-archive"><span class="lr-wb" aria-hidden="true"></span>No archived copy yet · <a href="${esc(saveNowUrl(link.info.url.href))}" target="_blank" rel="noopener">Save one now</a></p>`;
-  }
-  return '';
+function stats(c) {
+  const tiles = [
+    ['error', 'Broken', c.error],
+    ['warning', 'Outdated', c.warning],
+    ['unknown', 'Unconfirmed', c.unknown],
+    ['ok', 'Working', c.ok],
+  ];
+  return `<dl class="lr-stats">${tiles.map(([cls, label, n]) => `
+    <div class="lr-stat lr-${cls}${n ? '' : ' lr-zero'}"><dt>${label}</dt><dd>${n}</dd></div>`).join('')}
+  </dl>`;
+}
+
+function archiveLine(res) {
+  if (!res.snapshot) return '';
+  return `<p class="lr-archive"><span class="lr-wb" aria-hidden="true"></span>Archived ${esc(formatDate(res.snapshot.date))} · <a href="${esc(res.snapshot.url)}" target="_blank" rel="noopener">View copy</a></p>`;
 }
 
 function pageLink(path) {
@@ -495,60 +494,57 @@ function pageLink(path) {
 
 function pagesLine(link) {
   if (state.scope === 'page') return '';
-  const shown = link.pages.slice(0, 5).map((p) => `<li>${pageLink(p.path)}${p.count > 1 ? ` <span class="lr-count">${p.count}×</span>` : ''}</li>`).join('');
+  const shown = link.pages.slice(0, 5).map((p) => `<li>${icon('page')}${pageLink(p.path)}${p.count > 1 ? ` <span class="lr-count">${p.count}×</span>` : ''}</li>`).join('');
   const more = link.pages.length > 5 ? `<li class="lr-note">and ${link.pages.length - 5} more</li>` : '';
   return `<details class="lr-pages"${link.pages.length <= 3 ? ' open' : ''}><summary>On ${plural(link.pages.length, 'page')}</summary><ul>${shown}${more}</ul></details>`;
 }
 
 function card(link) {
   const res = resultFor(link);
-  const severity = res ? res.severity : 'pending';
-  const text = link.text || '(no link text)';
   const disabled = state.busy || !state.editable ? ' disabled' : '';
   const suffix = link.pages.length > 1 ? ` on ${link.pages.length} pages` : '';
-  const suggestions = (res?.suggestions || []).map((s, i) => `
-    <li>
-      <button type="button" class="lr-btn ${i === 0 ? 'primary' : 'secondary'}" data-fix="${esc(link.id)}" data-index="${i}"${disabled}>${esc(s.label)}${esc(suffix)}</button>
-      ${s.note ? `<span class="lr-note">${esc(s.note)}</span>` : ''}
-    </li>`).join('');
+  const fixes = res.suggestions.map((s, i) => `
+    <button type="button" class="lr-btn ${i === 0 ? 'primary' : 'quiet'}" data-fix="${esc(link.id)}" data-index="${i}"${s.note ? ` title="${esc(s.note)}"` : ''}${disabled}>${esc(s.label)}${esc(suffix)}</button>`).join('');
+  const href = link.info.url?.href || link.href;
   return `
-    <article class="lr-card lr-${severity}">
-      <header>
-        <span class="lr-badge">${esc(res ? res.label : 'Checking')}</span>
-        ${link.count > 1 ? `<span class="lr-count" title="Used ${link.count} times">${link.count}×</span>` : ''}
-      </header>
-      <p class="lr-text">${esc(text)}</p>
-      <a class="lr-url" href="${esc(link.info.url?.href || link.href)}" target="_blank" rel="noopener" title="${esc(link.href)}">${esc(link.href || '(empty)')}</a>
-      ${res ? `<p class="lr-msg">${esc(res.message)}</p>` : ''}
-      ${res ? archiveLine(res, link) : ''}
+    <article class="lr-card lr-${res.severity}">
+      <div class="lr-card-top">
+        <p class="lr-text">${esc(link.text || '(no link text)')}</p>
+        <span class="lr-badge">${esc(res.label)}</span>
+      </div>
+      <a class="lr-url" href="${esc(href)}" target="_blank" rel="noopener" title="${esc(link.href)}">${icon('external')}<span>${esc(link.href || '(empty)')}</span></a>
+      <p class="lr-msg">${esc(res.message)}${link.count > 1 && state.scope === 'page' ? ` Used ${link.count} times on this page.` : ''}</p>
+      ${archiveLine(res)}
       ${pagesLine(link)}
-      ${res?.editPath && state.mode !== 'demo' ? `<p class="lr-msg"><a href="${esc(editUrl(res.editPath))}" target="_blank" rel="noopener">Open that page to preview and publish it</a></p>` : ''}
-      ${suggestions ? `<ul class="lr-fixes">${suggestions}</ul>` : ''}
+      ${res.editPath && state.mode !== 'demo' ? `<a class="lr-action-link" href="${esc(editUrl(res.editPath))}" target="_blank" rel="noopener">Open that page to publish it</a>` : ''}
+      ${fixes ? `<div class="lr-fixes">${fixes}</div>` : ''}
     </article>`;
 }
 
-function visibleLinks() {
-  const sorted = [...state.links].sort((a, b) => {
-    const ra = resultFor(a);
-    const rb = resultFor(b);
-    return (ORDER[ra?.severity] ?? 2.5) - (ORDER[rb?.severity] ?? 2.5)
-      || b.pages.length - a.pages.length;
-  });
-  if (state.filter === 'all') return sorted;
-  return sorted.filter((l) => {
-    const r = resultFor(l);
-    return !r || ['error', 'warning', 'unknown'].includes(r.severity);
-  });
+/** The links to fix, in groups: broken, outdated, not confirmed. Links on the most pages first. */
+function groupedList() {
+  return GROUPS.map((g) => {
+    const links = state.links
+      .filter((l) => resultFor(l)?.severity === g.severity)
+      .sort((a, b) => b.pages.length - a.pages.length || b.count - a.count);
+    if (!links.length) return '';
+    return `<section class="lr-group lr-${g.severity}">
+      <h2>${icon(g.severity)}${g.title} <b>${links.length}</b><span>${g.hint}</span></h2>
+      <div class="lr-list">${links.map(card).join('')}</div>
+    </section>`;
+  }).join('');
 }
 
-function fixedList() {
-  if (!state.fixed.length) return '<p class="lr-empty">Nothing fixed yet.</p>';
-  return state.fixed.map((f) => `
-    <article class="lr-card lr-fixed">
-      <header><span class="lr-badge">Fixed${f.pages > 1 ? ` · ${plural(f.pages, 'page')}` : ''}</span></header>
-      <p class="lr-url lr-old">${esc(f.from)}</p>
-      <p class="lr-url">${f.type === 'unlink' ? 'Link removed, text kept' : `→ ${esc(f.to)}`}</p>
-    </article>`).join('');
+function skeleton() {
+  return `<div class="lr-list" aria-hidden="true">${'<div class="lr-card lr-skeleton"><span></span><span></span><span></span></div>'.repeat(3)}</div>`;
+}
+
+function allGood(c) {
+  return `<section class="lr-empty">
+    ${icon('ok')}
+    <strong>Nothing to fix</strong>
+    <span>${plural(c.ok, 'link')} checked${c.skip ? `, ${c.skip} email or jump ${c.skip === 1 ? 'link' : 'links'} skipped` : ''}.</span>
+  </section>`;
 }
 
 function scopeTabs() {
@@ -561,13 +557,17 @@ function scopeTabs() {
   </div>`;
 }
 
+function notice(text) {
+  return `<p class="lr-notice">${icon('info')}<span>${esc(text)}</span></p>`;
+}
+
 function scanNotes() {
   const run = state.scans[state.scope];
   if (state.scope === 'page' || run?.status !== 'done') return '';
   const notes = [];
   if (run.truncated) notes.push(`Only the first ${MAX_PAGES} pages were checked.`);
   if (run.failed.length) notes.push(`${plural(run.failed.length, 'page')} couldn't be read: ${run.failed.slice(0, 3).join(', ')}${run.failed.length > 3 ? '…' : ''}`);
-  return notes.map((n) => `<p class="lr-demo">${esc(n)}</p>`).join('');
+  return notes.map(notice).join('');
 }
 
 function confirmBar() {
@@ -577,52 +577,60 @@ function confirmBar() {
     <p>This changes links on <strong>${plural(confirm.pages, 'page')}</strong> in Document Authoring. Nothing is published.</p>
     <div>
       <button type="button" class="lr-btn primary" data-action="confirm">Change ${plural(confirm.pages, 'page')}</button>
-      <button type="button" class="lr-btn secondary" data-action="cancel">Cancel</button>
+      <button type="button" class="lr-btn quiet" data-action="cancel">Cancel</button>
     </div>
   </section>`;
+}
+
+function header(canRecheck) {
+  const where = state.scope === 'page' ? state.ctx?.path : `${folderPath() && state.scope === 'folder' ? folderPath() : 'Whole site'}`;
+  return `<header class="lr-head">
+    <span class="lr-logo" aria-hidden="true"></span>
+    <div class="lr-title">
+      <h1>Link Rescue</h1>
+      ${state.ctx ? `<p class="lr-page" title="${esc(where)}">${icon('page')}<span>${esc(where)}</span></p>` : ''}
+    </div>
+    ${state.ctx ? `<button type="button" class="lr-icon-btn" data-action="recheck" aria-label="Check again" title="Check again"${canRecheck ? '' : ' disabled'}>${icon('refresh')}</button>` : ''}
+  </header>`;
 }
 
 function render() {
   if (state.error) {
     app.innerHTML = `
-      <div class="lr-head"><div><h1><span class="lr-logo" aria-hidden="true"></span>Link Rescue</h1></div></div>
-      <section class="lr-verdict lr-error"><strong>${esc(state.error.title)}</strong><span>${esc(state.error.text)}</span></section>
-      <button type="button" class="lr-btn secondary" data-action="demo">Show the demo instead</button>`;
+      ${header(false)}
+      <section class="lr-verdict lr-error">${icon('error', 'lr-verdict-icon')}<div><strong>${esc(state.error.title)}</strong><span>${esc(state.error.text)}</span></div></section>
+      <button type="button" class="lr-btn quiet" data-action="demo">Show the demo instead</button>`;
     return;
   }
   const c = counts();
   const v = verdict(c);
   const ready = state.scope === 'page' || state.scans[state.scope]?.status === 'done';
-  const bulk = c.pending || !ready ? [] : bulkItems();
-  const list = state.filter === 'fixed' ? fixedList() : visibleLinks().map(card).join('');
-  const attention = c.error + c.warning + c.unknown;
+  const checked = ready && state.links.length && !c.pending;
+  const bulk = checked ? bulkItems() : [];
   const scanning = !ready && state.scans[state.scope]?.status !== 'error';
+  const toFix = c.error + c.warning + c.unknown;
+  let body = '';
+  if (checked) body = toFix ? groupedList() : allGood(c);
+  else if (scanning || c.pending || (state.scope === 'page' && !state.pageHtml)) body = skeleton();
   app.innerHTML = `
-    <div class="lr-head">
-      <div>
-        <h1><span class="lr-logo" aria-hidden="true"></span>Link Rescue</h1>
-        <p class="lr-page" title="${esc(state.ctx?.path)}">${esc(state.ctx?.path || '')}</p>
-      </div>
-      <button type="button" class="lr-btn secondary" data-action="recheck"${state.busy || c.pending || scanning ? ' disabled' : ''}>Check again</button>
-    </div>
-    ${state.mode === 'demo' ? '<p class="lr-demo">Demo pages. Open Link Rescue from Experience Workspace to check your own site.</p>' : ''}
-    ${!state.editable ? '<p class="lr-demo">You can view this page but not edit it, so fixes are turned off.</p>' : ''}
+    ${header(!state.busy && !c.pending && !scanning)}
+    ${state.mode === 'demo' ? notice('Demo pages. Open Link Rescue from Experience Workspace to check your own site.') : ''}
+    ${!state.editable ? notice('You can view this page but not edit it, so fixes are turned off.') : ''}
     ${scopeTabs()}
     <section class="lr-verdict lr-${v.cls}" aria-live="polite">
-      <strong>${esc(v.title)}</strong>
-      ${v.text ? `<span>${esc(v.text)}</span>` : ''}
-      ${v.progress !== undefined ? `<div class="lr-progress"><span style="width:${Math.round(v.progress * 100)}%"></span></div>` : ''}
+      ${icon(v.cls, 'lr-verdict-icon')}
+      <div>
+        <strong>${esc(v.title)}</strong>
+        ${v.text ? `<span>${esc(v.text)}</span>` : ''}
+        ${v.progress !== undefined ? `<div class="lr-progress"><span style="width:${Math.round(v.progress * 100)}%"></span></div>` : ''}
+      </div>
     </section>
+    ${checked ? stats(c) : ''}
     ${scanNotes()}
     ${confirmBar()}
-    ${bulk.length > 1 && !state.confirm ? `<button type="button" class="lr-btn primary lr-bulk" data-action="bulk"${state.busy || !state.editable ? ' disabled' : ''}>Apply ${bulk.length} suggested fixes</button>` : ''}
-    ${ready ? `<div class="lr-tabs" role="tablist">
-      <button type="button" role="tab" data-filter="attention" aria-selected="${state.filter === 'attention'}">Needs attention <b>${attention}</b></button>
-      <button type="button" role="tab" data-filter="all" aria-selected="${state.filter === 'all'}">All <b>${state.links.length}</b></button>
-      <button type="button" role="tab" data-filter="fixed" aria-selected="${state.filter === 'fixed'}">Fixed <b>${state.fixed.length}</b></button>
-    </div>
-    <div class="lr-list">${list || (state.links.length ? '<p class="lr-empty">Nothing needs attention.</p>' : '')}</div>` : ''}
-    <footer class="lr-foot">Archived copies by the <a href="https://web.archive.org/" target="_blank" rel="noopener">Internet Archive Wayback Machine</a>.</footer>`;
+    ${bulk.length > 1 && !state.confirm ? `<button type="button" class="lr-btn primary lr-bulk" data-action="bulk"${state.busy || !state.editable ? ' disabled' : ''}>Apply ${bulk.length} safe fixes</button>` : ''}
+    ${body}
+    <footer class="lr-foot">Archived copies by the <a href="https://web.archive.org/" target="_blank" rel="noopener">Wayback Machine</a> · Link checks by <a href="https://microlink.io/" target="_blank" rel="noopener">Microlink</a></footer>`;
 }
 
 app.addEventListener('click', (e) => {
@@ -636,12 +644,6 @@ app.addEventListener('click', (e) => {
   const scope = e.target.closest('[data-scope]');
   if (scope) {
     setScope(scope.dataset.scope);
-    return;
-  }
-  const tab = e.target.closest('[data-filter]');
-  if (tab) {
-    state.filter = tab.dataset.filter;
-    render();
     return;
   }
   const action = e.target.closest('[data-action]')?.dataset.action;

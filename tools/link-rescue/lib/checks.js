@@ -3,8 +3,8 @@
  * Internal links: the site's publishing status (admin.hlx.page) and its source (admin.da.live).
  * External links: browser requests, plus the Wayback Machine for archived copies.
  */
-import { toSourcePath, modernizeLegacy } from './links.js';
-import { findSnapshot } from './wayback.js';
+import { toSourcePath, toWebPath, modernizeLegacy } from './links.js';
+import findSnapshot from './wayback.js';
 import remoteCheck from './linkcheck.js';
 
 const TIMEOUT = 10000;
@@ -124,18 +124,18 @@ async function checkSitePage(webPath, ctx, fetcher, intro = '') {
   }
   const name = webPath === '/' ? 'The home page (/)' : `The page ${webPath}`;
   if (status.redirect) {
-    const r = result('warning', 'Redirects', `${intro}${name} redirects to ${status.redirect}. Link to the final page so readers skip the extra hop.`);
+    const r = result('warning', 'Redirects', `${intro}${name} redirects to ${status.redirect}.`);
     r.suggestions.push(replaceWith(`Use ${status.redirect}`, status.redirect));
     return r;
   }
   if (status.live === 200) return result('ok', 'Live', `${intro}${name} is published.`);
   if (status.preview === 200) {
-    return result('warning', 'Not published', `${intro}${name} is only in preview. Readers will get a "page not found" until you publish it too.`, { editPath: webPath });
+    return result('warning', 'Not published', `${intro}${name} is only in preview, so readers get "page not found" until it's published.`, { editPath: webPath });
   }
   if (source) {
-    return result('warning', 'Draft only', `${intro}${name} exists as a draft but hasn't been previewed or published yet.`, { editPath: webPath });
+    return result('warning', 'Draft only', `${intro}${name} is a draft that hasn't been previewed or published.`, { editPath: webPath });
   }
-  const r = result('error', 'Missing page', `${intro}There's no page at ${webPath}. Readers will get a "page not found".`);
+  const r = result('error', 'Missing page', `${intro}No page at ${webPath}, so readers get "page not found".`);
   const close = await closestPages(webPath, ctx, fetcher);
   close.forEach((c) => r.suggestions.push(replaceWith(`Use ${c.path}`, c.path, 'Closest existing page', false)));
   r.suggestions.push(UNLINK);
@@ -170,6 +170,32 @@ async function probe(url) {
   }
 }
 
+const EDS_HOST = /^([a-z0-9-]+)--([a-z0-9-]+)--([a-z0-9-]+)\.(?:hlx|aem)\.(page|live)$/i;
+
+/**
+ * Asks Edge Delivery whether a page exists on any public Edge Delivery site
+ * (`branch--site--org.aem.page` / `.aem.live`).
+ * @returns {Promise<boolean|null>} true / false, or null when it can't tell
+ */
+async function edsPageExists(url) {
+  const m = url.hostname.match(EDS_HOST);
+  if (!m) return null;
+  const [, ref, site, org, tier] = m;
+  try {
+    const resp = await fetch(`https://admin.hlx.page/status/${org}/${site}/${ref}${toWebPath(url.pathname)}`, {
+      credentials: 'omit', signal: AbortSignal.timeout(TIMEOUT),
+    });
+    if (resp.status === 404) return false;
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const status = tier === 'live' ? json.live?.status : json.preview?.status;
+    if (status === 200) return true;
+    return status === 404 ? false : null;
+  } catch {
+    return null;
+  }
+}
+
 function sameAddress(a, b) {
   const norm = (u) => u.replace(/#.*$/, '').replace(/\/$/, '');
   return norm(a) === norm(b);
@@ -182,34 +208,33 @@ async function addArchive(r, href, { offer }) {
     if (snap && offer) {
       r.suggestions.unshift(replaceWith(`Use the archived copy from ${formatDate(snap.date)}`, snap.url, 'Wayback Machine'));
     }
-    if (!snap) r.noArchive = true;
   } catch {
     // The archive is unavailable: show the link check without archive details.
   }
   return r;
 }
 
-/** Turns a page status (from the browser or Microlink) into a result. */
-async function fromStatus(href, status, finalUrl, by) {
+/** Turns a page status (from the browser, Edge Delivery or Microlink) into a result. */
+async function fromStatus(href, status, finalUrl) {
   if (status === 404 || status === 410) {
-    const r = result('error', 'Broken', `The page is gone (${status} ${status === 404 ? 'Not Found' : 'Gone'}).${by}`);
+    const r = result('error', 'Broken', `The page is gone (${status} ${status === 404 ? 'Not Found' : 'Gone'}).`);
     await addArchive(r, href, { offer: true });
     r.suggestions.push(UNLINK);
     return r;
   }
   if (status >= 500) {
-    const r = result('warning', 'Server error', `The site answered with an error (${status}). It may be down for now.${by}`);
+    const r = result('warning', 'Server error', `The site returned an error (${status}). It may be down.`);
     return addArchive(r, href, { offer: true });
   }
   if (status >= 400) {
-    return result('warning', `Error ${status}`, `The site refused the request (${status}). It may need a login.${by}`);
+    return result('warning', `Error ${status}`, `The site refused the request (${status}). It may need a login.`);
   }
   if (finalUrl && !sameAddress(finalUrl, href)) {
-    const r = result('warning', 'Moved', `This page now redirects to ${finalUrl}.${by}`);
+    const r = result('warning', 'Moved', `Now redirects to ${finalUrl}.`);
     r.suggestions.push(replaceWith('Use the new address', finalUrl, 'Where the old link ends up'));
     return r;
   }
-  return addArchive(result('ok', 'Working', `The page loads (${status}).${by}`), href, { offer: false });
+  return addArchive(result('ok', 'Working', `The page loads (${status}).`), href, { offer: false });
 }
 
 async function checkExternal(link) {
@@ -220,38 +245,40 @@ async function checkExternal(link) {
     const https = href.replace(/^http:/, 'https:');
     const p = await probe(https);
     const works = p.confirmed ? p.status < 400 : p.reachable;
-    const r = result('warning', 'Not secure', 'This link uses http://, so browsers may block it or warn readers.');
+    const r = result('warning', 'Not secure', 'Uses http://, which browsers may block or warn about.');
     if (works) r.suggestions.push(replaceWith('Switch to https://', https, 'The secure address works'));
-    else r.message += ' The secure version of this address doesn\'t answer either.';
+    else r.message += ' The https:// version doesn\'t answer either.';
     return addArchive(r, href, { offer: !works });
   }
 
   if (url.hostname === 'web.archive.org' && url.pathname.startsWith('/web/')) {
-    return result('ok', 'Archived copy', 'This links to a saved copy in the Wayback Machine, which stays online.');
+    return result('ok', 'Archived copy', 'A saved copy in the Wayback Machine.');
   }
 
+  const exists = await edsPageExists(url);
+  if (exists === false) return fromStatus(href, 404, href);
+  if (exists === true) return fromStatus(href, 200, href);
+
   const p = await probe(href);
-  if (p.confirmed) return fromStatus(href, p.status, p.redirected ? p.finalUrl : href, '');
+  if (p.confirmed) return fromStatus(href, p.status, p.redirected ? p.finalUrl : href);
 
   // The browser couldn't see the page status: ask Microlink to load the page instead.
   const remote = await remoteCheck(href);
-  if (remote.status) return fromStatus(href, remote.status, remote.finalUrl, ' Checked by Microlink.');
+  if (remote.status) return fromStatus(href, remote.status, remote.finalUrl);
   if (remote.unreachable || (!p.reachable && !p.timeout)) {
-    const r = result('error', 'Unreachable', 'The site can\'t be reached. The domain may have shut down or the address is wrong.');
+    const r = result('error', 'Unreachable', 'The site can\'t be reached. It may have shut down.');
     await addArchive(r, href, { offer: true });
     r.suggestions.push(UNLINK);
     return r;
   }
-  const why = remote.limited
-    ? ' Today\'s free Microlink checks are used up, so Link Rescue can\'t confirm it until tomorrow.'
-    : '';
+  const why = remote.limited ? ' Today\'s free checks are used up.' : '';
   if (p.timeout) {
-    const r = result('warning', 'Timed out', `The site took too long to answer. It may be slow or down.${why}`);
+    const r = result('warning', 'Timed out', 'The site took too long to answer. It may be down.');
     return addArchive(r, href, { offer: true });
   }
   // The site answers, but it hides the page status from the browser: it may still be a 404.
   return addArchive(
-    result('unknown', 'Not confirmed', `${url.hostname} is up, but it doesn't let the browser see whether this page exists.${why} Open the link once to make sure it isn't broken.`),
+    result('unknown', 'Not confirmed', `${url.hostname} hides page status from the browser.${why} Open it once to check.`),
     href,
     { offer: false },
   );
@@ -278,36 +305,48 @@ export async function checkLink(link, ctx, fetcher) {
     case 'editor': {
       if (!info.internal) {
         const target = `https://main--${info.repo}--${info.org}.aem.live${info.webPath}`;
-        const r = result('error', 'Editor link', 'This opens the authoring editor. Readers can\'t sign in to it.');
+        const r = result('error', 'Editor link', 'Opens the editor, which readers can\'t use.');
         if (info.org && info.repo) r.suggestions.push(replaceWith('Use the published page', target));
         return r;
       }
-      const r = await checkSitePage(info.webPath, ctx, fetcher, 'This opens the authoring editor, which readers can\'t use. ');
+      const r = await checkSitePage(info.webPath, ctx, fetcher, 'Opens the editor, which readers can\'t use. ');
+      if (r.severity === 'ok') r.message = 'Opens the editor, which readers can\'t use.';
       r.severity = 'error';
       r.label = 'Editor link';
       r.suggestions = [replaceWith(`Use ${info.webPath}`, info.webPath, 'Link to the page itself'), ...r.suggestions.filter((s) => s.type === 'unlink')];
       return r;
     }
     case 'localhost': {
-      const r = result('error', 'Local address', 'This points to someone\'s own computer (localhost). Nobody else can open it.');
+      const r = result('error', 'Local address', 'Points to someone\'s own computer (localhost).');
       r.suggestions.push(replaceWith(`Use ${info.webPath}`, info.webPath));
       return r;
     }
     case 'legacy': {
-      const next = modernizeLegacy(info.url);
-      const r = result('warning', 'Old domain', 'hlx.page and hlx.live are retired Edge Delivery domains. Use aem.page / aem.live instead.');
-      r.suggestions.push(replaceWith('Use the aem.live address', next));
+      const next = new URL(modernizeLegacy(info.url));
+      const exists = await edsPageExists(next);
+      if (exists === false) {
+        const r = result('error', 'Broken', 'This page no longer exists, on the old or the new domain.');
+        await addArchive(r, info.url.href, { offer: true });
+        r.suggestions.push(UNLINK);
+        return r;
+      }
+      const r = result('warning', 'Old domain', 'Uses a retired hlx domain.');
+      r.suggestions.push(exists
+        ? replaceWith(`Use the ${next.hostname.split('.').slice(-2).join('.')} address`, next.href, 'The page exists there')
+        : replaceWith(`Use the ${next.hostname.split('.').slice(-2).join('.')} address`, next.href, 'Open it once to check', false));
       return r;
     }
     case 'internal': {
       const r = await checkSitePage(info.webPath, ctx, fetcher);
       if (info.host === 'page') {
         // A link to the preview site: readers on the live site would jump to preview.
-        const msg = 'This points to the preview site (aem.page), not the published site. ';
-        r.message = msg + r.message;
+        const msg = 'Points to the preview site instead of the live one.';
         if (r.severity === 'ok') {
           r.severity = 'warning';
           r.label = 'Preview link';
+          r.message = msg;
+        } else {
+          r.message = `${msg} ${r.message}`;
         }
         if (r.severity !== 'error') {
           const to = `${info.webPath}${info.url.search}${info.url.hash}`;
