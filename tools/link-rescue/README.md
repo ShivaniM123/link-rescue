@@ -63,7 +63,7 @@ In folder and selected-page scans:
 | **Broken** | The page is gone (404 / 410), including broken short links such as bit.ly. | **The archived copy from the Wayback Machine** or **the site's home page** |
 | **Unreachable** | The site can't be reached. The domain may have shut down. | **The archived copy from the Wayback Machine** |
 | **Timed out** | The site took too long to answer. | The archived copy from the Wayback Machine |
-| **Moved** | The page now redirects to a new address. | The new address |
+| **Redirects / Short link** | The link forwards to a page that works (e.g. bit.ly). | Not a problem: listed under **Working**, with where it leads |
 | **Not secure** | An `http://` link. Link Rescue checks whether the `https://` version works. | Switch to `https://` |
 | **Server error** | The site answered with a 5xx error. It may be down for now. | The archived copy from the Wayback Machine |
 | **Refused** | The site refused the request (e.g. 401 / 403, it needs a login). | Flagged for review |
@@ -86,7 +86,7 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
   - **Use the archived copy:** from the Wayback Machine.
   - **Use the site's home page:** when the page is gone but the site still works (not offered for short-link services like bit.ly).
 - **One-click fix** on every problem, with **Undo**. Undo also works for fixes that changed several pages.
-- **Apply N suggested fixes** applies every safe fix in one go. Safe fixes keep readers on the same content: old domains, editor and preview links, moved pages, `https://` and archived copies. It never guesses a different page for you.
+- **Apply N suggested fixes** applies every safe fix in one go. Safe fixes keep readers on the same content: old domains, editor and preview links, `https://` and archived copies. It never guesses a different page for you.
 - **Confirm before changing other pages:** before a fix changes more than the open page, the panel shows "This changes links on N pages in Document Authoring. Nothing is published."
 - **Update link** (the blue button on every card) opens a small form, like the editor's link dialog, with **Address** and **Link text** already filled in. Save changes the link on every page it's on (with the same confirmation and Undo as other fixes). Invalid addresses are rejected, and links with bold text or images inside keep their formatting.
 - When no working replacement exists, the card says so: "No working replacement found. Update the link with an address you know works."
@@ -98,7 +98,7 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 - **Summary card** at the top with an icon and a one-line verdict, for example "4 broken links: fix them before you publish" or "All links look good: safe to publish". Folder and selected-page scans add "across N pages".
 - **Broken / Working tabs** with counts. **Broken** (selected to start with) lists the links to fix; **Working** lists the links that work, with their address and what was found (e.g. Live or Working). The selected tab is highlighted.
 - **Apply N safe fixes** button right under the summary.
-- **One Broken links list.** Each card's badge says exactly what was found: Not found, Gone, Unreachable, Timed out, Missing page, Not published, Editor link, Preview link, Old domain, Moved, Not secure, Server error, or Not checked (with the reason). The most serious problems come first, then links on the most pages, and fixed links drop off the list straight away.
+- **One Broken links list.** Each card's badge says exactly what was found: Not found, Gone, Unreachable, Timed out, Missing page, Not published, Editor link, Preview link, Old domain, Not secure, Server error, or Not checked (with the reason). The most serious problems come first, then links on the most pages, and fixed links drop off the list straight away.
 - **Compact cards:** link text, a problem badge, the address (opens in a new tab), one short sentence on what's wrong, and the fix buttons.
 - **Loading skeleton** and a progress bar while scanning ("Finding pages… / Reading pages 12 of 40 / Checking links 30 of 85").
 - **"Nothing to fix"** state when every link works.

@@ -219,6 +219,9 @@ async function addArchive(r, href, { offer }) {
   return r;
 }
 
+// Link shorteners: redirecting is their job, and their home page is never a useful replacement.
+const SHORTENERS = /^(www\.)?(bit\.ly|t\.co|goo\.gl|tinyurl\.com|ow\.ly|buff\.ly|rebrand\.ly|is\.gd|cutt\.ly|tiny\.cc)$/i;
+
 /** Turns a page status (from the browser, Edge Delivery or the link-check Worker) into a result. */
 async function fromStatus(href, status, finalUrl) {
   if (status === 404 || status === 410) {
@@ -234,9 +237,9 @@ async function fromStatus(href, status, finalUrl) {
     return result('warning', `Error ${status}`, `The site refused the request (${status}). It may need a login.`);
   }
   if (finalUrl && !sameAddress(finalUrl, href)) {
-    const r = result('warning', 'Moved', `Now redirects to ${finalUrl}.`);
-    r.suggestions.push(replaceWith('Use the new address', finalUrl, 'Where the old link ends up'));
-    return r;
+    // The link forwards to a page that works, so it works: short links are made to do this.
+    const label = SHORTENERS.test(new URL(href).hostname) ? 'Short link' : 'Redirects';
+    return result('ok', label, `Leads to ${finalUrl} (${status}).`, { leadsTo: finalUrl });
   }
   return addArchive(result('ok', 'Working', `The page loads (${status}).`), href, { offer: false });
 }
@@ -307,9 +310,6 @@ async function checkExternal(link) {
 }
 
 /* ---------- replacement suggestions ---------- */
-
-// Link shorteners: their home page is never a useful replacement.
-const SHORTENERS = /^(www\.)?(bit\.ly|t\.co|goo\.gl|tinyurl\.com|ow\.ly|buff\.ly|rebrand\.ly|is\.gd|cutt\.ly|tiny\.cc)$/i;
 
 /**
  * Checks that an address works in the browser (or on Edge Delivery), and where it ends up.

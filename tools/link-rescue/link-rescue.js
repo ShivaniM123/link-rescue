@@ -618,7 +618,7 @@ function workingList() {
     <li>
       <p class="lr-text">${esc(l.text || '(no link text)')}</p>
       <a class="lr-url" href="${esc(l.info.url?.href || l.href)}" target="_blank" rel="noopener" title="${esc(l.href)}">${icon('external')}<span>${esc(l.href)}</span></a>
-      <span class="lr-note">${esc(resultFor(l).label)}${l.pages.length > 1 ? ` · on ${plural(l.pages.length, 'page')}` : ''}</span>
+      <span class="lr-note">${esc(resultFor(l).label)}${resultFor(l).leadsTo ? ` · leads to ${esc(resultFor(l).leadsTo.replace(/^https?:\/\//, ''))}` : ''}${l.pages.length > 1 ? ` · on ${plural(l.pages.length, 'page')}` : ''}</span>
     </li>`).join('');
   return `<section class="lr-group lr-ok">
     <h2>${icon('ok')}Working links <b>${links.length}</b></h2>
