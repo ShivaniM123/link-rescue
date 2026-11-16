@@ -31,6 +31,13 @@ const state = {
   // Folder and site scans: web path -> links on that page.
   scans: { folder: null, site: null },
   links: [],
+  // Link lists from the last check, per scope. Checks only run on open and on "Check again".
+  lists: {},
+  // Links fixed since the last check, per scope: they drop off the list without a new check.
+  fixed: { page: new Set(), folder: new Set(), site: new Set() },
+  // The addresses on the open page at the last check, to notice when the page changes.
+  checkedHrefs: null,
+  changed: false,
   results: new Map(),
   editable: true,
   busy: false,
@@ -125,7 +132,7 @@ async function writePage(path, html) {
   if (!resp.ok) throw new Error(`${path} couldn't be saved (${resp.status}).`);
 }
 
-/** Stores a page's HTML everywhere it's used, then rebuilds the link list. */
+/** Stores a page's HTML everywhere it's used (the link lists only change on a check). */
 function storePage(path, html) {
   if (path === state.ctx.path) state.pageHtml = html;
   ['folder', 'site'].forEach((scope) => {
@@ -160,15 +167,36 @@ function mergeLinks(pages) {
   return [...byKey.values()];
 }
 
-function rebuild() {
-  if (state.scope === 'page') {
-    state.links = state.pageHtml ? mergeLinks([[state.ctx.path, state.pageHtml]]) : [];
+function hrefsOf(html) {
+  return new Set(extractLinks(html, state.ctx).map((l) => l.href));
+}
+
+function sameSet(a, b) {
+  return a.size === b.size && [...a].every((x) => b.has(x));
+}
+
+/** Builds a scope's link list from the pages read, and checks its links. */
+function check(scope) {
+  if (scope === 'page') {
+    state.lists.page = state.pageHtml ? mergeLinks([[state.ctx.path, state.pageHtml]]) : [];
+    state.checkedHrefs = hrefsOf(state.pageHtml);
+    state.changed = false;
   } else {
-    const run = state.scans[state.scope];
-    state.links = run?.status === 'done' ? mergeLinks([...run.html.entries()]) : [];
+    const run = state.scans[scope];
+    state.lists[scope] = run?.status === 'done' ? mergeLinks([...run.html.entries()]) : [];
   }
-  runChecks();
+  state.fixed[scope].clear();
+  if (scope === state.scope) {
+    state.links = state.lists[scope];
+    runChecks();
+  }
   render();
+}
+
+/** Links still to show: the last check, minus links fixed since. */
+function visibleLinks() {
+  const fixed = state.fixed[state.scope];
+  return state.links.filter((l) => !fixed.has(l.key));
 }
 
 function resultFor(link) {
@@ -201,7 +229,16 @@ async function runChecks() {
 function setPageHtml(html) {
   if (html === state.pageHtml) return;
   storePage(state.ctx.path, html);
-  rebuild();
+  // The first copy of the page is checked straight away; later edits only show a note.
+  if (!state.lists.page) {
+    check('page');
+    return;
+  }
+  const changed = !sameSet(hrefsOf(html), state.checkedHrefs);
+  if (changed !== state.changed) {
+    state.changed = changed;
+    render();
+  }
 }
 
 /* ---------- folder and site scans ---------- */
@@ -252,7 +289,7 @@ async function scan(scope) {
     run.status = 'error';
     run.error = e.message;
   }
-  if (state.scans[scope] === run && state.scope === scope) rebuild();
+  if (state.scans[scope] === run && run.status === 'done') check(scope);
   else render();
 }
 
@@ -260,14 +297,43 @@ function setScope(scope) {
   if (scope === state.scope) return;
   state.scope = scope;
   state.confirm = null;
-  if (scope !== 'page' && !state.scans[scope]) scan(scope);
-  rebuild();
+  state.links = state.lists[scope] || [];
+  // A scope is checked the first time it's opened; after that it shows its last check.
+  if (!state.lists[scope]) {
+    if (scope === 'page') check('page');
+    else if (!state.scans[scope]) scan(scope);
+  }
+  render();
 }
 
 function recheck() {
   state.results.clear();
-  if (state.scope === 'page') rebuild();
+  if (state.scope === 'page') check('page');
   else scan(state.scope);
+}
+
+/** Marks links as fixed in every scope where all the pages they're on were changed. */
+function markFixed(undo, fixed) {
+  const done = new Map();
+  undo.forEach(({ path, done: changes }) => changes.forEach(({ link }) => {
+    if (!done.has(link.key)) done.set(link.key, new Set());
+    done.get(link.key).add(path);
+  }));
+  Object.entries(state.lists).forEach(([scope, list]) => {
+    list.forEach((l) => {
+      const paths = done.get(l.key);
+      if (!paths || !l.pages.every((pg) => paths.has(pg.path))) return;
+      if (fixed) state.fixed[scope].add(l.key);
+      else state.fixed[scope].delete(l.key);
+    });
+  });
+  // Keep the open page's addresses in step, so our own fix doesn't count as a page change.
+  undo.filter((u) => u.path === state.ctx.path).forEach(({ done: changes }) => {
+    changes.forEach(({ link, suggestion }) => {
+      state.checkedHrefs?.delete(fixed ? link.href : suggestion.to);
+      state.checkedHrefs?.add(fixed ? suggestion.to : link.href);
+    });
+  });
 }
 
 /* ---------- fixing ---------- */
@@ -350,7 +416,7 @@ async function applyFixes(items) {
     }
     state.hold = { until: Date.now() + HOLD_MS, hrefs: items.map((i) => i.link.href) };
     state.undo = undo;
-    rebuild();
+    markFixed(undo, true);
     const where = undo.length > 1 ? ` on ${plural(undo.length, 'page')}` : '';
     const problem = failed.length ? ` ${plural(failed.length, 'page')} couldn't be saved.` : '';
     toast(`${plural(changed, 'link')} fixed${where}.${problem}`, { label: 'Undo', run: undoLast });
@@ -383,9 +449,9 @@ async function undoLast() {
       await writePage(entry.path, html);
       storePage(entry.path, html);
     }
+    markFixed(undo, false);
     state.undo = null;
     state.hold = null;
-    rebuild();
     toast('Fix undone.');
   } catch (e) {
     toast(e.message);
@@ -396,7 +462,7 @@ async function undoLast() {
 }
 
 function bulkItems() {
-  return state.links.map((link) => {
+  return visibleLinks().map((link) => {
     const res = resultFor(link);
     if (!res || !['error', 'warning'].includes(res.severity)) return null;
     const suggestion = res.suggestions.find((s) => s.type === 'replace' && s.safe);
@@ -433,7 +499,7 @@ function counts() {
   const c = {
     error: 0, warning: 0, ok: 0, pending: 0, unknown: 0, skip: 0,
   };
-  state.links.forEach((l) => {
+  visibleLinks().forEach((l) => {
     const r = resultFor(l);
     if (!r) c.pending += 1;
     else c[r.severity in c ? r.severity : 'unknown'] += 1;
@@ -461,9 +527,10 @@ function verdict(c) {
   if (!state.links.length && state.scope === 'page' && !state.pageHtml) return { cls: 'pending', title: 'Reading the page…' };
   if (!state.links.length) return { cls: 'ok', title: 'No links yet', text: `There are no links on ${scopeName()}.` };
   if (c.pending) {
-    const done = state.links.length - c.pending;
+    const total = visibleLinks().length;
+    const done = total - c.pending;
     return {
-      cls: 'pending', title: 'Checking links…', text: `${done} of ${state.links.length}`, progress: done / state.links.length,
+      cls: 'pending', title: 'Checking links…', text: `${done} of ${total}`, progress: done / total,
     };
   }
   const on = state.scope === 'page' ? '' : ` across ${scopeName()}`;
@@ -510,7 +577,7 @@ function card(link, groupTitle) {
   // Each fix shows where it leads (or why it's offered) under the button.
   const fixes = res.suggestions.map((s, i) => `
     <div class="lr-fix">
-      <button type="button" class="lr-btn ${i === 0 ? 'primary' : 'quiet'}" data-fix="${esc(link.id)}" data-index="${i}"${s.to ? ` title="${esc(s.to)}"` : ''}${disabled}>${esc(s.label)}${esc(suffix)}</button>
+      <button type="button" class="lr-btn quiet" data-fix="${esc(link.id)}" data-index="${i}"${s.to ? ` title="${esc(s.to)}"` : ''}${disabled}>${esc(s.label)}${esc(suffix)}</button>
       ${s.note ? `<span class="lr-note">${esc(s.note)}</span>` : ''}
     </div>`).join('');
   const href = link.info.url?.href || link.href;
@@ -528,7 +595,7 @@ function card(link, groupTitle) {
       ${state.editing === link.key ? editForm(link, suffix) : `
       ${!fixes && res.severity === 'error' && !res.editPath ? '<p class="lr-note">No working replacement found. Update the link with an address you know works.</p>' : ''}
       <div class="lr-fixes">${fixes}
-        <div class="lr-fix"><button type="button" class="lr-btn quiet lr-update" data-edit="${esc(link.key)}"${disabled}>${icon('edit')}Update link</button></div>
+        <div class="lr-fix"><button type="button" class="lr-btn primary lr-update" data-edit="${esc(link.key)}"${disabled}>${icon('edit')}Update link</button></div>
       </div>`}
     </article>`;
 }
@@ -554,7 +621,7 @@ function editForm(link, suffix) {
 /** The links to fix, in groups: broken, outdated, not confirmed. Links on the most pages first. */
 function groupedList() {
   return GROUPS.map((g) => {
-    const links = state.links
+    const links = visibleLinks()
       .filter((l) => resultFor(l)?.severity === g.severity)
       .sort((a, b) => b.pages.length - a.pages.length || b.count - a.count);
     if (!links.length) return '';
@@ -684,6 +751,7 @@ function renderPanel() {
     ${header(!state.busy && !c.pending && !scanning)}
     ${state.mode === 'demo' ? notice('Demo pages. Open Link Rescue from Experience Workspace to check your own site.') : ''}
     ${!state.editable ? notice('You can view this page but not edit it, so fixes are turned off.') : ''}
+    ${state.changed ? `<p class="lr-notice lr-changed">${icon('info')}<span>The page's links changed since the last check.</span><button type="button" class="lr-link-btn" data-action="recheck"${state.busy || c.pending ? ' disabled' : ''}>Check again</button></p>` : ''}
     ${scopeTabs()}
     <section class="lr-verdict lr-${v.cls}" aria-live="polite">
       ${icon(v.cls, 'lr-verdict-icon')}

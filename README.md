@@ -2,7 +2,7 @@
 
 **Find and fix broken links before you publish, on one page, a folder or the whole site, with one-click Wayback Machine rescue.**
 
-Link Rescue is an Experience Workspace (da.live) extension. It opens as a side panel next to the page you're editing and checks every link on it as you write. It can also scan a whole folder or the whole site. Each problem is explained in plain language and fixed in one click.
+Link Rescue is an Experience Workspace (da.live) extension. It opens as a side panel next to the page you're editing and checks every link on it. It can also scan a whole folder or the whole site. Each problem is explained in plain language and fixed in one click.
 
 | | |
 |---|---|
@@ -28,7 +28,7 @@ Link Rescue catches all of these **before** the page goes live, and fixes them w
 
 | Scope | What's checked |
 |---|---|
-| **This page** (default) | The page open in Experience Workspace. Checked as soon as the panel opens, and again whenever you pause typing. |
+| **This page** (default) | The page open in Experience Workspace. Checked as soon as the panel opens. |
 | **Folder** | Every page in the open page's folder and its sub-folders. Shown when the page is inside a folder. |
 | **All pages** | Every page on the site, including nav and footer (up to 500 pages). |
 
@@ -60,7 +60,7 @@ In folder and site scans:
 
 | Finding | What it means | Fix offered |
 |---|---|---|
-| **Broken** | The page is gone (404 / 410), including broken short links such as bit.ly. | **The address in the link text** (when it's a working web address), **the archived copy from the Wayback Machine**, or **the site's home page** |
+| **Broken** | The page is gone (404 / 410), including broken short links such as bit.ly. | **The archived copy from the Wayback Machine** or **the site's home page** |
 | **Unreachable** | The site can't be reached. The domain may have shut down. | **The archived copy from the Wayback Machine** |
 | **Timed out** | The site took too long to answer. | The archived copy from the Wayback Machine |
 | **Moved** | The page now redirects to a new address. | The new address |
@@ -83,14 +83,13 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 - When the day's free checks are used up, the panel says so, and those links show as **Not confirmed** until the next day.
 
 ### 7. Fixing
-- **Suggested replacement links** for broken external links, each checked before it's offered and shown under its button:
-  - **Use the address in the link text:** when the link text is itself a web address (e.g. text `https://www.aem.live/tutorial` on a broken bit.ly link), Link Rescue checks it and offers where it really leads (`www.aem.live/developer/tutorial`).
+- **Suggested replacement links** for broken external links, each checked before it's offered and shown next to its button:
   - **Use the archived copy:** from the Wayback Machine.
   - **Use the site's home page:** when the page is gone but the site still works (not offered for short-link services like bit.ly).
 - **One-click fix** on every problem, with **Undo**. Undo also works for fixes that changed several pages.
 - **Apply N suggested fixes** applies every safe fix in one go. Safe fixes keep readers on the same content: old domains, editor and preview links, moved pages, `https://` and archived copies. It never guesses a different page for you.
 - **Confirm before changing other pages:** before a fix changes more than the open page, the panel shows "This changes links on N pages in Document Authoring. Nothing is published."
-- **Update link** on every card opens a small form, like the editor's link dialog, with **Address** and **Link text** already filled in. Save changes the link on every page it's on (with the same confirmation and Undo as other fixes). Invalid addresses are rejected, and links with bold text or images inside keep their formatting.
+- **Update link** (the blue button on every card) opens a small form, like the editor's link dialog, with **Address** and **Link text** already filled in. Save changes the link on every page it's on (with the same confirmation and Undo as other fixes). Invalid addresses are rejected, and links with bold text or images inside keep their formatting.
 - When no working replacement exists, the card says so: "No working replacement found. Update the link with an address you know works."
 - Link text that shows the old address is updated too.
 - Only the matching links change. The rest of each page stays exactly as it was.
@@ -104,7 +103,7 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 - **Compact cards:** link text, a problem badge, the address (opens in a new tab), one short sentence on what's wrong, and the fix buttons.
 - **Loading skeleton** and a progress bar while scanning ("Finding pages… / Reading pages 12 of 40 / Checking links 30 of 85").
 - **"Nothing to fix"** state when every link works.
-- A round **Check again** button in the header, next to the page being checked.
+- **Checks only run when you ask:** when the panel opens, the first time you open Folder or All pages, and when you click **Check again** (the round button in the header). Fixes and Undo don't re-check anything: a fixed link just drops off the list. If you add, remove or change links in the editor, the panel shows "The page's links changed since the last check" with a **Check again** button, instead of re-checking on its own.
 - Fixes are turned off when you can view a page but not edit it.
 - If the panel can't connect to the editor, it says so ("Couldn't connect to the editor") instead of showing the wrong page.
 - Light and dark mode, reduced motion, keyboard focus styles and screen-reader labels.

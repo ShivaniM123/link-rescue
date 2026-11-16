@@ -714,6 +714,28 @@ a {
   cursor: pointer;
 }
 
+/* "The page's links changed since the last check" */
+.lr-changed {
+  align-items: center;
+  background: var(--lr-accent-bg);
+  color: var(--lr-text);
+}
+
+.lr-changed span {
+  flex: 1;
+}
+
+.lr-changed .lr-link-btn {
+  flex-shrink: 0;
+  color: var(--lr-accent);
+  font-size: 12px;
+}
+
+.lr-changed .lr-link-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .lr-scope button:disabled {
   cursor: not-allowed;
 }

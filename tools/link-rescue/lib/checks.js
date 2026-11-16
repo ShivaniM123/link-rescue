@@ -283,37 +283,22 @@ async function checkExternal(link) {
 
 // Link shorteners: their home page is never a useful replacement.
 const SHORTENERS = /^(www\.)?(bit\.ly|t\.co|goo\.gl|tinyurl\.com|ow\.ly|buff\.ly|rebrand\.ly|is\.gd|cutt\.ly|tiny\.cc)$/i;
-// Link text that is itself a web address, e.g. "https://www.aem.live/tutorial" or "www.example.com/page".
-const URL_TEXT = /^(https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?(\/\S*)?$/i;
 
 /**
- * Checks that an address works, and where it ends up.
- * @param {string} raw The address
- * @param {{remote: boolean}} options Whether Microlink may be asked when the browser can't tell
- * @returns {Promise<{href: string, verified: boolean}|null>} The working address, or null
+ * Checks that an address works in the browser (or on Edge Delivery), and where it ends up.
+ * @param {string} href The address
+ * @returns {Promise<string|null>} The working address, or null
  */
-async function workingAddress(raw, { remote }) {
-  let url;
-  try {
-    url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
-  } catch {
-    return null;
-  }
+async function workingAddress(href) {
+  const url = new URL(href);
   const eds = await edsPageExists(url);
-  if (eds !== null) return eds ? { href: url.href, verified: true } : null;
+  if (eds !== null) return eds ? url.href : null;
   const p = await probe(url.href);
   if (p.confirmed) {
     if (p.status >= 400) return null;
-    return { href: p.redirected && p.finalUrl ? p.finalUrl : url.href, verified: true };
+    return p.redirected && p.finalUrl ? p.finalUrl : url.href;
   }
-  if (!p.reachable) return null;
-  if (!remote) return { href: url.href, verified: false };
-  const check = await remoteCheck(url.href);
-  if (check.status) {
-    return check.status < 400 ? { href: check.finalUrl || url.href, verified: true } : null;
-  }
-  if (check.unreachable) return null;
-  return { href: url.href, verified: false };
+  return p.reachable ? url.href : null;
 }
 
 function shortAddress(href) {
@@ -321,35 +306,15 @@ function shortAddress(href) {
 }
 
 /**
- * Adds working replacement addresses to a broken (or unconfirmed) external link:
- * the address shown in the link text, and the site's home page.
+ * Offers the site's home page for a page that's gone on a site that still works.
  */
 async function addReplacements(r, link) {
   const { url } = link.info;
-  const found = [];
-
-  const text = (link.text || '').trim();
-  if (URL_TEXT.test(text) && !sameAddress(text.replace(/^(?!https?:\/\/)/i, 'https://'), url.href)) {
-    const target = await workingAddress(text, { remote: true });
-    if (target && !sameAddress(target.href, url.href)) {
-      const note = target.verified
-        ? shortAddress(target.href)
-        : `${shortAddress(target.href)} · open it once to check`;
-      found.push(replaceWith('Use the address in the link text', target.href, note, false));
-      if (r.severity === 'unknown') r.message += ' The link text shows a different address.';
-    }
+  if (r.label !== 'Broken' || url.pathname === '/' || SHORTENERS.test(url.hostname)) return r;
+  const home = await workingAddress(`${url.origin}/`);
+  if (home && !r.suggestions.some((sg) => sameAddress(sg.to, home))) {
+    r.suggestions = [replaceWith('Use the site\'s home page', home, shortAddress(home), false), ...r.suggestions];
   }
-
-  // Only for pages that are gone on a site that still works.
-  if (r.severity === 'error' && r.label === 'Broken' && url.pathname !== '/' && !SHORTENERS.test(url.hostname)) {
-    const home = await workingAddress(`${url.origin}/`, { remote: false });
-    if (home && !found.some((f) => sameAddress(f.to, home.href))) {
-      found.push(replaceWith('Use the site\'s home page', home.href, shortAddress(home.href), false));
-    }
-  }
-
-  if (!found.length) return r;
-  r.suggestions = [...found, ...r.suggestions];
   return r;
 }
 
@@ -430,7 +395,7 @@ async function checkOne(link, ctx, fetcher) {
  */
 export async function checkLink(link, ctx, fetcher) {
   const r = await checkOne(link, ctx, fetcher);
-  if (['external', 'legacy'].includes(link.info.kind) && ['error', 'unknown'].includes(r.severity)) {
+  if (['external', 'legacy'].includes(link.info.kind) && r.severity === 'error') {
     return addReplacements(r, link);
   }
   return r;
