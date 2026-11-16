@@ -905,43 +905,6 @@ button.lr-stat:disabled em {
   cursor: pointer;
 }
 
-/* "N links couldn't be checked · Show" */
-.lr-verdict .lr-show {
-  margin-left: 4px;
-  color: var(--lr-accent);
-  font-size: 12px;
-}
-
-.lr-unchecked {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 8px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.lr-unchecked li {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  background: rgb(255 255 255 / 60%);
-  font-size: 12px;
-}
-
-.lr-unchecked a {
-  overflow: hidden;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.lr-unchecked span {
-  color: var(--lr-muted);
-}
-
 /* "The page's links changed since the last check" */
 .lr-changed {
   align-items: center;

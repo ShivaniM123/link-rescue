@@ -76,10 +76,10 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 - Links that already point to a Wayback Machine copy are recognised as safe.
 
 ### 6. Link check on Cloudflare
-- Some sites, such as bit.ly and many company sites, don't let a browser see whether a page exists. For those links, the site's Cloudflare Worker loads the page on Cloudflare's servers and returns the real status. That's how a broken bit.ly link shows as **Broken**.
+- Some sites, such as bit.ly and many company sites, don't let a browser see whether a page exists. So every external link is checked by the site's Cloudflare Worker, which loads it on Cloudflare's servers and returns the real status. That's how a broken bit.ly link shows as **Broken**.
 - It also reports where moved pages now lead, and which sites can't be reached.
-- Only links the browser can't confirm are sent to the Worker, and each answer is remembered for a day. The free plan allows about 100,000 checks a day.
-- If the Worker can't be reached (for example on a network that blocks `workers.dev`), those links aren't listed, because they may well work, but the summary says how many couldn't be checked (e.g. "1 link couldn't be checked").
+- Each answer is remembered for a day, and **Check again** always asks fresh. The free plan allows about 100,000 checks a day.
+- If a link can't be checked (for example on a network or with a browser extension that blocks `workers.dev`), it's listed under **Broken links** with a **Not checked** badge and the exact reason, so you can open it once to make sure it works. The summary also says how many couldn't be checked.
 
 ### 7. Fixing
 - **Suggested replacement links** for broken external links, each checked before it's offered and shown next to its button:
@@ -98,7 +98,7 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 - **Summary card** at the top with an icon and a one-line verdict, for example "4 broken links: fix them before you publish" or "All links look good: safe to publish". Folder and selected-page scans add "across N pages".
 - **Stat tiles** for Broken and Working links. Click **Working** to list the working links (link text, address and what was found, e.g. Live or Working) below the broken ones; click again to hide them.
 - **Apply N safe fixes** button right under the summary.
-- **One Broken links list.** Each card's badge says exactly what was found: Not found, Gone, Unreachable, Timed out, Missing page, Not published, Editor link, Preview link, Old domain, Moved, Not secure, Server error. The most serious problems come first, then links on the most pages, and fixed links drop off the list straight away.
+- **One Broken links list.** Each card's badge says exactly what was found: Not found, Gone, Unreachable, Timed out, Missing page, Not published, Editor link, Preview link, Old domain, Moved, Not secure, Server error, or Not checked (with the reason). The most serious problems come first, then links on the most pages, and fixed links drop off the list straight away.
 - **Compact cards:** link text, a problem badge, the address (opens in a new tab), one short sentence on what's wrong, and the fix buttons.
 - **Loading skeleton** and a progress bar while scanning ("Finding pages… / Reading pages 12 of 40 / Checking links 30 of 85").
 - **"Nothing to fix"** state when every link works.
@@ -114,7 +114,7 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 |---|---|
 | Pages on your site | The site's publishing status (`admin.hlx.page`) and the page source (`admin.da.live`) |
 | Folder scans and the page list | The Document Authoring page list (`admin.da.live/list`) |
-| External links | A browser request reads the status when the site allows it. Otherwise the **Cloudflare Worker** loads the page and returns the real status. |
+| External links | The **Cloudflare Worker** loads each link and returns its real status (200, 404, …). The browser is only used if the Worker can't be reached. |
 | Archived copies | **Wayback Machine** Availability API |
 
 When you click a fix:

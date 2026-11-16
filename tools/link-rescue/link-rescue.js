@@ -8,6 +8,7 @@
 import DA_SDK from 'https://da.live/nx/utils/sdk.js';
 import { extractLinks, toWebPath } from './lib/links.js';
 import { checkLink, formatDate } from './lib/checks.js';
+import { startFresh } from './lib/linkcheck.js';
 import { applyChange, reverseChange } from './lib/fixes.js';
 import {
   listPages, sourceUrl, folderOf, MAX_PAGES,
@@ -48,8 +49,6 @@ const state = {
   confirm: null,
   // The link whose "Update link" form is open (by key, which survives re-checks).
   editing: null,
-  // Whether the list of links that couldn't be checked is open.
-  showUnchecked: false,
   // Whether the working links are listed (the Working tile toggles them).
   showWorking: false,
   undo: null,
@@ -363,6 +362,7 @@ function checkPicked() {
 
 function recheck() {
   state.results.clear();
+  startFresh();
   if (state.scope === 'page') check('page');
   else if (state.scope === 'pick') checkPicked();
   else scan(state.scope);
@@ -546,8 +546,8 @@ function icon(name, cls = '') {
 }
 
 // One list of links to fix; each card's badge says what was found (Not found, Old domain, Moved…).
-// Links whose status couldn't be checked aren't listed: they may well work.
-const TO_FIX = ['error', 'warning'];
+// Links that couldn't be checked are listed last, with a "Not checked" badge and the reason.
+const TO_FIX = ['error', 'warning', 'unknown'];
 const BROKEN_TITLE = 'Broken links';
 
 function counts() {
@@ -589,15 +589,14 @@ function verdict(c) {
     };
   }
   const on = state.scope === 'page' ? '' : ` across ${scopeName()}`;
-  const broken = c.error + c.warning;
-  // Links that couldn't be checked aren't listed, but the summary says how many there are.
+  const broken = c.error + c.warning + c.unknown;
   const unchecked = c.unknown ? ` ${plural(c.unknown, 'link')} couldn't be checked.` : '';
   if (broken) return { cls: 'error', title: `${plural(broken, 'broken link')}${on}`, text: `Fix them before you publish.${unchecked}` };
-  return { cls: 'ok', title: `All links look good${on}`, text: unchecked ? unchecked.trim() : 'Safe to publish.' };
+  return { cls: 'ok', title: `All links look good${on}`, text: 'Safe to publish.' };
 }
 
 function stats(c) {
-  const broken = c.error + c.warning;
+  const broken = c.error + c.warning + c.unknown;
   return `<div class="lr-stats">
     <div class="lr-stat lr-error${broken ? '' : ' lr-zero'}"><span>Broken</span><strong>${broken}</strong></div>
     <button type="button" class="lr-stat lr-ok${c.ok ? '' : ' lr-zero'}" data-action="toggle-working" aria-expanded="${state.showWorking}"${c.ok ? '' : ' disabled'}>
@@ -869,13 +868,6 @@ function updatePicker() {
   if (empty) empty.hidden = shown > 0;
 }
 
-/** The links that couldn't be checked, and why. */
-function uncheckedList() {
-  const items = visibleLinks().filter((l) => resultFor(l)?.severity === 'unknown').map((l) => `
-    <li><a href="${esc(l.info.url?.href || l.href)}" target="_blank" rel="noopener">${esc(l.href)}</a><span>${esc(resultFor(l).message)}</span></li>`).join('');
-  return `<ul class="lr-unchecked">${items}</ul>`;
-}
-
 function renderPanel() {
   if (state.error) {
     app.innerHTML = `
@@ -898,7 +890,7 @@ function renderPanel() {
   const checked = ready && state.links.length && !c.pending;
   const bulk = checked ? bulkItems() : [];
   const scanning = !ready && state.scans[state.scope]?.status !== 'error';
-  const toFix = c.error + c.warning;
+  const toFix = c.error + c.warning + c.unknown;
   let body = '';
   if (checked) body = (toFix ? groupedList() : allGood(c)) + (state.showWorking ? workingList() : '');
   else if (scanning || c.pending || (state.scope === 'page' && !state.pageHtml)) body = skeleton();
@@ -913,8 +905,7 @@ function renderPanel() {
       ${icon(v.cls, 'lr-verdict-icon')}
       <div>
         <strong>${esc(v.title)}</strong>
-        ${v.text ? `<span>${esc(v.text)}${checked && c.unknown ? ` <button type="button" class="lr-link-btn lr-show" data-action="toggle-unchecked" aria-expanded="${state.showUnchecked}">${state.showUnchecked ? 'Hide' : 'Show'}</button>` : ''}</span>` : ''}
-        ${checked && c.unknown && state.showUnchecked ? uncheckedList() : ''}
+        ${v.text ? `<span>${esc(v.text)}</span>` : ''}
         ${v.progress !== undefined ? `<div class="lr-progress"><span style="width:${Math.round(v.progress * 100)}%"></span></div>` : ''}
       </div>
     </section>
@@ -948,10 +939,6 @@ app.addEventListener('click', (e) => {
   if (action === 'recheck') recheck();
   if (action === 'toggle-working') {
     state.showWorking = !state.showWorking;
-    render();
-  }
-  if (action === 'toggle-unchecked') {
-    state.showUnchecked = !state.showUnchecked;
     render();
   }
   if (action === 'pick-open') openPicker();

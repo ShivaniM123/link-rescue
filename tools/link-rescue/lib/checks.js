@@ -241,14 +241,45 @@ async function fromStatus(href, status, finalUrl) {
   return addArchive(result('ok', 'Working', `The page loads (${status}).`), href, { offer: false });
 }
 
+/** Does the page at this address work? Asks Cloudflare, then Edge Delivery. */
+async function pageWorks(href) {
+  const remote = await remoteCheck(href);
+  if (remote.status) return remote.status < 400;
+  if (remote.unreachable) return false;
+  return edsPageExists(new URL(href));
+}
+
+/** The browser-only check, used when the link-check Worker can't be reached. */
+async function browserCheck(url, reason) {
+  const { href } = url;
+  const exists = await edsPageExists(url);
+  if (exists === false) return fromStatus(href, 404, href);
+  if (exists === true) return fromStatus(href, 200, href);
+  const p = await probe(href);
+  if (p.confirmed) return fromStatus(href, p.status, p.redirected ? p.finalUrl : href);
+  if (!p.reachable && !p.timeout) {
+    const r = result('error', 'Unreachable', 'The site can\'t be reached. It may have shut down.');
+    return addArchive(r, href, { offer: true });
+  }
+  if (p.timeout) {
+    const r = result('warning', 'Timed out', 'The site took too long to answer. It may be down.');
+    return addArchive(r, href, { offer: true });
+  }
+  // The site answers, but it hides the page status from the browser: it may still be a 404.
+  return addArchive(
+    result('unknown', 'Not checked', `Link Rescue couldn't check this link: ${[reason, edsProblems.get(href)].filter(Boolean).join('; ') || 'the link check failed'}. Open it once to make sure it works.`),
+    href,
+    { offer: false },
+  );
+}
+
 async function checkExternal(link) {
   const { url, insecure } = link.info;
   const { href } = url;
 
   if (insecure) {
     const https = href.replace(/^http:/, 'https:');
-    const p = await probe(https);
-    const works = p.confirmed ? p.status < 400 : p.reachable;
+    const works = await pageWorks(https);
     const r = result('warning', 'Not secure', 'Uses http://, which browsers may block or warn about.');
     if (works) r.suggestions.push(replaceWith('Switch to https://', https, 'The secure address works'));
     else r.message += ' The https:// version doesn\'t answer either.';
@@ -259,31 +290,20 @@ async function checkExternal(link) {
     return result('ok', 'Archived copy', 'A saved copy in the Wayback Machine.');
   }
 
-  const exists = await edsPageExists(url);
-  if (exists === false) return fromStatus(href, 404, href);
-  if (exists === true) return fromStatus(href, 200, href);
-
-  const p = await probe(href);
-  if (p.confirmed) return fromStatus(href, p.status, p.redirected ? p.finalUrl : href);
-
-  // The browser couldn't see the page status: ask the link-check Worker to load the page instead.
+  // Cloudflare loads the link and returns its real status: 200 working, 404 not found, and so on.
   const remote = await remoteCheck(href);
-  if (remote.status) return fromStatus(href, remote.status, remote.finalUrl);
-  if (remote.unreachable || (!p.reachable && !p.timeout)) {
+  // Cloudflare's own codes when it can't reach a site (530: the domain doesn't exist).
+  if ([521, 522, 523, 525, 526, 530].includes(remote.status)) remote.unreachable = true;
+  else if (remote.status) return fromStatus(href, remote.status, remote.finalUrl);
+  if (remote.unreachable) {
     const r = result('error', 'Unreachable', 'The site can\'t be reached. It may have shut down.');
-    await addArchive(r, href, { offer: true });
-    return r;
+    return addArchive(r, href, { offer: true });
   }
-  if (p.timeout || remote.timedOut) {
+  if (remote.timedOut) {
     const r = result('warning', 'Timed out', 'The site took too long to answer. It may be down.');
     return addArchive(r, href, { offer: true });
   }
-  // The site answers, but it hides the page status from the browser: it may still be a 404.
-  return addArchive(
-    result('unknown', 'Not confirmed', `${url.hostname} hides page status from the browser, and ${[edsProblems.get(href), remote.reason].filter(Boolean).join('; ') || 'the link check failed'}.`),
-    href,
-    { offer: false },
-  );
+  return browserCheck(url, remote.reason);
 }
 
 /* ---------- replacement suggestions ---------- */
@@ -298,6 +318,9 @@ const SHORTENERS = /^(www\.)?(bit\.ly|t\.co|goo\.gl|tinyurl\.com|ow\.ly|buff\.ly
  */
 async function workingAddress(href) {
   const url = new URL(href);
+  const remote = await remoteCheck(url.href);
+  if (remote.status) return remote.status < 400 ? (remote.finalUrl || url.href) : null;
+  if (remote.unreachable) return null;
   const eds = await edsPageExists(url);
   if (eds !== null) return eds ? url.href : null;
   const p = await probe(url.href);
@@ -357,7 +380,7 @@ async function checkOne(link, ctx, fetcher) {
     }
     case 'legacy': {
       const next = new URL(modernizeLegacy(info.url));
-      const exists = await edsPageExists(next);
+      const exists = await pageWorks(next.href);
       if (exists === false) {
         const r = result('error', 'Not found', 'This page no longer exists, on the old or the new domain.');
         await addArchive(r, info.url.href, { offer: true });

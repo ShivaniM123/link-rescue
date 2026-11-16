@@ -21,6 +21,19 @@ function workerUrl() {
   }
 }
 
+// While set, checks skip both caches (the panel's and the Worker's): "Check again" asks fresh.
+let freshUntil = 0;
+
+/** Forgets remembered answers, so the next checks ask Cloudflare again. */
+export function startFresh() {
+  freshUntil = Date.now() + 5 * 60 * 1000;
+  try {
+    localStorage.removeItem(CACHE_KEY);
+  } catch {
+    // Storage is blocked: nothing to clear.
+  }
+}
+
 function load() {
   try {
     return JSON.parse(localStorage.getItem(CACHE_KEY)) || { urls: {} };
@@ -62,10 +75,13 @@ function remember(url, result) {
  *   `{ failed: true }` the Worker couldn't be reached
  */
 export default async function remoteCheck(url) {
+  const fresh = Date.now() < freshUntil;
   const cached = load().urls[url];
-  if (cached && Date.now() - cached.at < DAY) return cached.result;
+  if (!fresh && cached && Date.now() - cached.at < DAY) return cached.result;
   try {
-    const resp = await fetch(`${workerUrl()}/check?${new URLSearchParams({ url })}`, { signal: AbortSignal.timeout(20000) });
+    const params = new URLSearchParams({ url });
+    if (fresh) params.set('fresh', '1');
+    const resp = await fetch(`${workerUrl()}/check?${params}`, { signal: AbortSignal.timeout(20000) });
     if (!resp.ok) return { failed: true, reason: `the link check answered ${resp.status}` };
     const json = await resp.json();
     if (json.timeout) return { timedOut: true };

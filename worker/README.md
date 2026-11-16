@@ -1,10 +1,10 @@
 # Link Rescue link-check Worker (Cloudflare, free)
 
-Some sites, such as bit.ly, don't let a browser see whether a page exists. This small Cloudflare Worker checks those links on Cloudflare's servers and returns the real status (for example `404`) to Link Rescue.
+This small Cloudflare Worker loads each external link on Cloudflare's servers and returns its real status to Link Rescue: `200` working, `404` not found, and so on. It works for every site, including ones like bit.ly that hide the status from the browser.
 
 - **Cost:** free, with no credit card. The Workers free plan allows 100,000 requests a day (reset at midnight UTC); only links the browser can't check are sent, and the panel remembers each answer for a day. If the limit is ever reached, those links simply can't be checked until the next day: nothing is charged.
 - **Privacy:** it only receives the link address. It doesn't store pages or keep logs of its own.
-- **Safety:** it only answers Link Rescue (da.live, your `*.aem.page` / `*.aem.live` sites and `localhost`), and it refuses private or internal addresses.
+- **Safety:** it returns only a status code (never page content), and it refuses private or internal addresses. It answers any page, because Experience Workspace loads extensions from its own addresses.
 
 ## Set it up (about 10 minutes, in the browser)
 
