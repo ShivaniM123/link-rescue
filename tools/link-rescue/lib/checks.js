@@ -5,6 +5,7 @@
  */
 import { toSourcePath, modernizeLegacy } from './links.js';
 import { findSnapshot } from './wayback.js';
+import remoteCheck from './linkcheck.js';
 
 const TIMEOUT = 10000;
 const pageListCache = new Map();
@@ -188,6 +189,29 @@ async function addArchive(r, href, { offer }) {
   return r;
 }
 
+/** Turns a page status (from the browser or Microlink) into a result. */
+async function fromStatus(href, status, finalUrl, by) {
+  if (status === 404 || status === 410) {
+    const r = result('error', 'Broken', `The page is gone (${status} ${status === 404 ? 'Not Found' : 'Gone'}).${by}`);
+    await addArchive(r, href, { offer: true });
+    r.suggestions.push(UNLINK);
+    return r;
+  }
+  if (status >= 500) {
+    const r = result('warning', 'Server error', `The site answered with an error (${status}). It may be down for now.${by}`);
+    return addArchive(r, href, { offer: true });
+  }
+  if (status >= 400) {
+    return result('warning', `Error ${status}`, `The site refused the request (${status}). It may need a login.${by}`);
+  }
+  if (finalUrl && !sameAddress(finalUrl, href)) {
+    const r = result('warning', 'Moved', `This page now redirects to ${finalUrl}.${by}`);
+    r.suggestions.push(replaceWith('Use the new address', finalUrl, 'Where the old link ends up'));
+    return r;
+  }
+  return addArchive(result('ok', 'Working', `The page loads (${status}).${by}`), href, { offer: false });
+}
+
 async function checkExternal(link) {
   const { url, insecure } = link.info;
   const { href } = url;
@@ -207,42 +231,30 @@ async function checkExternal(link) {
   }
 
   const p = await probe(href);
-  if (p.confirmed) {
-    if (p.status === 404 || p.status === 410) {
-      const r = result('error', 'Broken', `The page is gone (${p.status} ${p.status === 404 ? 'Not Found' : 'Gone'}).`);
-      await addArchive(r, href, { offer: true });
-      r.suggestions.push(UNLINK);
-      return r;
-    }
-    if (p.status >= 500) {
-      const r = result('warning', 'Server error', `The site answered with an error (${p.status}). It may be down for now.`);
-      return addArchive(r, href, { offer: true });
-    }
-    if (p.status >= 400) {
-      return result('warning', `Error ${p.status}`, `The site refused the request (${p.status}). It may need a login.`);
-    }
-    if (p.redirected && p.finalUrl && !sameAddress(p.finalUrl, href)) {
-      const r = result('warning', 'Moved', `This page now redirects to ${p.finalUrl}.`);
-      r.suggestions.push(replaceWith('Use the new address', p.finalUrl, 'Where the old link ends up'));
-      return r;
-    }
-    return addArchive(result('ok', 'Working', `The page loads (${p.status}).`), href, { offer: false });
-  }
+  if (p.confirmed) return fromStatus(href, p.status, p.redirected ? p.finalUrl : href, '');
 
-  if (p.reachable) {
-    return addArchive(
-      result('ok', 'Site responds', 'The site answers. This site doesn\'t let the browser confirm the exact page, so open it once to be sure.'),
-      href,
-      { offer: false },
-    );
+  // The browser couldn't see the page status: ask Microlink to load the page instead.
+  const remote = await remoteCheck(href);
+  if (remote.status) return fromStatus(href, remote.status, remote.finalUrl, ' Checked by Microlink.');
+  if (remote.unreachable || (!p.reachable && !p.timeout)) {
+    const r = result('error', 'Unreachable', 'The site can\'t be reached. The domain may have shut down or the address is wrong.');
+    await addArchive(r, href, { offer: true });
+    r.suggestions.push(UNLINK);
+    return r;
   }
-
-  const r = p.timeout
-    ? result('warning', 'Timed out', 'The site took too long to answer. It may be slow or down.')
-    : result('error', 'Unreachable', 'The site can\'t be reached. The domain may have shut down or the address is wrong.');
-  await addArchive(r, href, { offer: true });
-  if (r.severity === 'error') r.suggestions.push(UNLINK);
-  return r;
+  const why = remote.limited
+    ? ' Today\'s free Microlink checks are used up, so Link Rescue can\'t confirm it until tomorrow.'
+    : '';
+  if (p.timeout) {
+    const r = result('warning', 'Timed out', `The site took too long to answer. It may be slow or down.${why}`);
+    return addArchive(r, href, { offer: true });
+  }
+  // The site answers, but it hides the page status from the browser: it may still be a 404.
+  return addArchive(
+    result('unknown', 'Not confirmed', `${url.hostname} is up, but it doesn't let the browser see whether this page exists.${why} Open the link once to make sure it isn't broken.`),
+    href,
+    { offer: false },
+  );
 }
 
 /* ---------- entry point ---------- */

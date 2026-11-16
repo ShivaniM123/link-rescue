@@ -6,7 +6,8 @@ Link Rescue is a side panel for Experience Workspace (da.live). It checks every 
 
 | | |
 |---|---|
-| Third party | [Internet Archive – Wayback Machine](https://archive.org/help/wayback_api.php) (Availability API, free, no key) |
+| Third parties | [Internet Archive – Wayback Machine](https://archive.org/help/wayback_api.php) (Availability API, free, no key): archived copies of dead pages |
+| | [Microlink](https://microlink.io/) (free plan, no key): confirms the status of pages whose sites hide it from the browser, such as bit.ly |
 | Demo | `https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/link-rescue.html?demo` |
 
 ## Why authors need it
@@ -38,7 +39,8 @@ In folder and site scans, each link is listed once with the pages it's on. A fix
 | **Preview link** (`*.aem.page`) | Address pattern | Relative link that works on preview and live |
 | **Old domain** (`hlx.page` / `hlx.live`) | Address pattern | Same address on `aem.page` / `aem.live` |
 | **Local address** (`localhost`) | Address pattern | Relative link |
-| **Broken** external page (404 / 410) | Browser request (sites that allow it) | **Archived copy from the Wayback Machine**, or remove the link |
+| **Broken** external page (404 / 410) | Browser request, or Microlink for sites that hide status from the browser (e.g. bit.ly) | **Archived copy from the Wayback Machine**, or remove the link |
+| **Not confirmed** | The status couldn't be confirmed (e.g. the day's free Microlink checks are used up) | Listed under Needs attention so the author opens it once |
 | **Unreachable / timed out** external site | Browser request fails | **Archived copy from the Wayback Machine** |
 | **Moved** external page | Browser request follows the redirect | The new address |
 | **Not secure** (`http://`) | Address + checks the `https://` version | Switch to `https://` |
@@ -75,7 +77,7 @@ Options (add them to the path as query parameters):
 
 ## Limits and next steps
 
-- Browsers only show the status of a page on another site if that site allows it (CORS). For other sites, Link Rescue can still tell whether the site answers. Dead domains and timeouts are found, but a 404 on such a site shows as "Site responds". A small link-check service (for example a Cloudflare Worker) would remove this limit. The code has one place to plug it in: `probe()` in `lib/checks.js`.
+- Browsers only show the status of a page on another site if that site allows it (CORS). For other sites, Link Rescue asks Microlink. Its free plan allows only about 5 checks a day per person, so only those links are sent, and each answer is remembered for a day. When the checks run out, those links show as "Not confirmed". For bigger sites, a Microlink PRO key or your own link-check service (for example a Cloudflare Worker) removes the limit. It plugs into `lib/linkcheck.js`.
 - Possible next steps: images as well as links, and a scheduled site-wide report.
 
 ## Files
@@ -88,6 +90,7 @@ tools/link-rescue/
   lib/links.js       finds links and works out their type
   lib/checks.js      checks each link and suggests fixes
   lib/wayback.js     Wayback Machine integration
+  lib/linkcheck.js   Microlink integration
   lib/fixes.js       applies a fix to the page HTML
   lib/site.js        lists and reads pages for folder and site scans
   demo/sample.html   demo page with one example of each problem

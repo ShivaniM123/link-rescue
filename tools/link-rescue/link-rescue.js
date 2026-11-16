@@ -453,14 +453,28 @@ function verdict(c) {
     return { cls: 'pending', title: `Checking links… ${done} of ${state.links.length}`, progress: done / state.links.length };
   }
   const on = state.scope === 'page' ? '' : ` across ${scopeName()}`;
+  const unconfirmed = c.unknown ? `${plural(c.unknown, 'link')} couldn't be confirmed.` : '';
   if (c.error) {
     return {
       cls: 'error',
       title: `${plural(c.error, 'broken link')}${on}: fix before you publish`,
-      text: c.warning ? `${c.warning} more could be better.` : '',
+      text: [c.warning ? `${c.warning} more could be better.` : '', unconfirmed].filter(Boolean).join(' '),
     };
   }
-  if (c.warning) return { cls: 'warning', title: `Nothing broken${on}. A few links could be better`, text: `${c.warning} to review.` };
+  if (c.warning) {
+    return {
+      cls: 'warning',
+      title: `No broken links found${on}. A few could be better`,
+      text: [`${c.warning} to review.`, unconfirmed].filter(Boolean).join(' '),
+    };
+  }
+  if (c.unknown) {
+    return {
+      cls: 'warning',
+      title: `${plural(c.unknown, 'link')}${on} couldn't be confirmed`,
+      text: 'Those sites hide page status from the browser. Open each one once to make sure it works.',
+    };
+  }
   return { cls: 'ok', title: `All links look good${on}. Safe to publish`, text: `${plural(c.ok, 'link')} checked.` };
 }
 

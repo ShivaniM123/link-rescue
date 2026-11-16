@@ -6,7 +6,8 @@ Link Rescue is an Experience Workspace (da.live) extension. It opens as a side p
 
 | | |
 |---|---|
-| Third party | [Internet Archive – Wayback Machine](https://archive.org/help/wayback_api.php) (Availability API, free, no key) |
+| Third parties | [Internet Archive – Wayback Machine](https://archive.org/help/wayback_api.php) (Availability API, free, no key): archived copies of dead pages |
+| | [Microlink](https://microlink.io/) (free plan, no key): confirms the status of pages whose sites hide it from the browser, such as bit.ly |
 | Panel | https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/link-rescue.html |
 | Demo | https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/link-rescue.html?demo |
 
@@ -36,7 +37,8 @@ In folder and site scans, each link is listed once with the pages it's on. A fix
 - **Local address** (`localhost`): replaced with the page on the site.
 
 ### Links to other websites
-- **Broken** (404 / 410), **unreachable** or **timed out**: offers the archived copy from the Wayback Machine.
+- **Broken** (404 / 410), **unreachable** or **timed out**: offers the archived copy from the Wayback Machine. This includes sites like bit.ly that hide page status from the browser; Microlink confirms those.
+- **Not confirmed**: shown under Needs attention when a link's status can't be confirmed (for example once the day's free Microlink checks are used up). It's never shown as working.
 - **Moved:** suggests the new address.
 - **Not secure** (`http://`): checks the `https://` version and offers to switch.
 - **Server error:** flags sites that are answering with an error.
@@ -68,7 +70,7 @@ In folder and site scans, each link is listed once with the pages it's on. A fix
 | Check | Source |
 |---|---|
 | Pages on your site | The site's publishing status (`admin.hlx.page`) and page source (`admin.da.live`) |
-| External links | A browser request. It reads the status when the site allows it, and otherwise checks whether the site answers |
+| External links | A browser request. It reads the status when the site allows it. Otherwise Microlink loads the page and returns the real status |
 | Archived copies | Wayback Machine Availability API |
 
 When you click a fix, Link Rescue saves the editor and reads the saved page. It changes the matching `<a href>` values and writes the page back with your own sign-in. Document Authoring then pushes the change into the open editor.
@@ -93,7 +95,7 @@ Options (add them to the panel address as query parameters):
 
 ## Limits and next steps
 
-- Some websites don't let a browser check their pages (CORS). For those sites, Link Rescue can still tell whether the site is up, but it can't confirm a 404, so the link shows as "Site responds". A small link-check service (for example a Cloudflare Worker) would remove this limit. It would plug into `probe()` in `tools/link-rescue/lib/checks.js`.
+- Some websites don't let a browser read their answers (CORS). Link Rescue then asks Microlink. Its free plan allows only about 5 checks a day per person, so only those links are sent, and each answer is remembered for a day. When the checks run out, those links show as "Not confirmed". For bigger sites, a Microlink PRO key or a small link-check service of your own (for example a Cloudflare Worker) removes the limit. It plugs into `tools/link-rescue/lib/linkcheck.js`.
 - Possible next steps: images as well as links, and a scheduled site-wide report.
 
 ## Project structure
@@ -109,6 +111,7 @@ tools/link-rescue/
   lib/links.js       finds links and works out their type
   lib/checks.js      checks each link and suggests fixes
   lib/wayback.js     Wayback Machine integration
+  lib/linkcheck.js   Microlink integration
   lib/fixes.js       applies a fix to the page HTML
   lib/site.js        lists and reads pages for folder and site scans
   demo/sample.html   demo page with one example of each problem

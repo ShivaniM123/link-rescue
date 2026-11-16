@@ -351,6 +351,11 @@ a {
   color: var(--lr-warning);
 }
 
+.lr-unknown {
+  border-left-color: var(--lr-accent);
+  border-left-style: dashed;
+}
+
 .lr-ok,
 .lr-fixed {
   border-left-color: var(--lr-ok);
