@@ -474,7 +474,6 @@ function stats(c) {
   const tiles = [
     ['error', 'Broken', c.error],
     ['warning', 'Outdated', c.warning],
-    ['unknown', 'Unconfirmed', c.unknown],
     ['ok', 'Working', c.ok],
   ];
   return `<dl class="lr-stats">${tiles.map(([cls, label, n]) => `
