@@ -590,9 +590,18 @@ function verdict(c) {
   }
   const on = state.scope === 'page' ? '' : ` across ${scopeName()}`;
   const broken = c.error + c.warning;
-  const unchecked = c.unknown ? ` ${plural(c.unknown, 'link')} couldn't be checked.` : '';
-  if (broken) return { cls: 'error', title: `${plural(broken, 'broken link')}${on}`, text: `Fix them before you publish.${unchecked}` };
-  return { cls: 'ok', title: `No broken links${on}`, text: c.unknown ? unchecked.trim() : 'Safe to publish.' };
+  // "1 broken link · 1 not checked": the same words as the tabs.
+  const notChecked = c.unknown ? ` · ${c.unknown} not checked` : '';
+  const openThem = `Open the not-checked ${c.unknown === 1 ? 'link' : 'links'} once to make sure ${c.unknown === 1 ? 'it works' : 'they work'}.`;
+  if (broken) {
+    return {
+      cls: 'error',
+      title: `${plural(broken, 'broken link')}${notChecked}${on}`,
+      text: c.unknown ? `Fix the broken ${broken === 1 ? 'link' : 'links'} before you publish. ${openThem}` : 'Fix them before you publish.',
+    };
+  }
+  if (c.unknown) return { cls: 'unknown', title: `No broken links${notChecked}${on}`, text: openThem };
+  return { cls: 'ok', title: `All links look good${on}`, text: 'Safe to publish.' };
 }
 
 /** The Broken / Working (/ Not checked) tabs, with their counts. */
