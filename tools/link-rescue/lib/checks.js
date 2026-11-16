@@ -31,8 +31,6 @@ function replaceWith(label, to, note, safe = true) {
   };
 }
 
-const UNLINK = { type: 'unlink', label: 'Remove the link, keep the text' };
-
 /* ---------- internal pages ---------- */
 
 async function pageStatus(webPath, ctx, fetcher) {
@@ -138,7 +136,6 @@ async function checkSitePage(webPath, ctx, fetcher, intro = '') {
   const r = result('error', 'Missing page', `${intro}No page at ${webPath}, so readers get "page not found".`);
   const close = await closestPages(webPath, ctx, fetcher);
   close.forEach((c) => r.suggestions.push(replaceWith(`Use ${c.path}`, c.path, 'Closest existing page', false)));
-  r.suggestions.push(UNLINK);
   return r;
 }
 
@@ -219,7 +216,6 @@ async function fromStatus(href, status, finalUrl) {
   if (status === 404 || status === 410) {
     const r = result('error', 'Broken', `The page is gone (${status} ${status === 404 ? 'Not Found' : 'Gone'}).`);
     await addArchive(r, href, { offer: true });
-    r.suggestions.push(UNLINK);
     return r;
   }
   if (status >= 500) {
@@ -268,7 +264,6 @@ async function checkExternal(link) {
   if (remote.unreachable || (!p.reachable && !p.timeout)) {
     const r = result('error', 'Unreachable', 'The site can\'t be reached. It may have shut down.');
     await addArchive(r, href, { offer: true });
-    r.suggestions.push(UNLINK);
     return r;
   }
   const why = remote.limited ? ' Today\'s free checks are used up.' : '';
@@ -284,24 +279,91 @@ async function checkExternal(link) {
   );
 }
 
-/* ---------- entry point ---------- */
+/* ---------- replacement suggestions ---------- */
+
+// Link shorteners: their home page is never a useful replacement.
+const SHORTENERS = /^(www\.)?(bit\.ly|t\.co|goo\.gl|tinyurl\.com|ow\.ly|buff\.ly|rebrand\.ly|is\.gd|cutt\.ly|tiny\.cc)$/i;
+// Link text that is itself a web address, e.g. "https://www.aem.live/tutorial" or "www.example.com/page".
+const URL_TEXT = /^(https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?(\/\S*)?$/i;
 
 /**
- * Checks one link.
- * @param {object} link A link from extractLinks()
- * @param {object} ctx Site context
- * @param {Function} fetcher fetch() that adds the author's sign-in when available
- * @returns {Promise<object>} The check result with suggestions
+ * Checks that an address works, and where it ends up.
+ * @param {string} raw The address
+ * @param {{remote: boolean}} options Whether Microlink may be asked when the browser can't tell
+ * @returns {Promise<{href: string, verified: boolean}|null>} The working address, or null
  */
-export async function checkLink(link, ctx, fetcher) {
+async function workingAddress(raw, { remote }) {
+  let url;
+  try {
+    url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    return null;
+  }
+  const eds = await edsPageExists(url);
+  if (eds !== null) return eds ? { href: url.href, verified: true } : null;
+  const p = await probe(url.href);
+  if (p.confirmed) {
+    if (p.status >= 400) return null;
+    return { href: p.redirected && p.finalUrl ? p.finalUrl : url.href, verified: true };
+  }
+  if (!p.reachable) return null;
+  if (!remote) return { href: url.href, verified: false };
+  const check = await remoteCheck(url.href);
+  if (check.status) {
+    return check.status < 400 ? { href: check.finalUrl || url.href, verified: true } : null;
+  }
+  if (check.unreachable) return null;
+  return { href: url.href, verified: false };
+}
+
+function shortAddress(href) {
+  return href.replace(/^https?:\/\//, '').replace(/\/$/, '');
+}
+
+/**
+ * Adds working replacement addresses to a broken (or unconfirmed) external link:
+ * the address shown in the link text, and the site's home page.
+ */
+async function addReplacements(r, link) {
+  const { url } = link.info;
+  const found = [];
+
+  const text = (link.text || '').trim();
+  if (URL_TEXT.test(text) && !sameAddress(text.replace(/^(?!https?:\/\/)/i, 'https://'), url.href)) {
+    const target = await workingAddress(text, { remote: true });
+    if (target && !sameAddress(target.href, url.href)) {
+      const note = target.verified
+        ? shortAddress(target.href)
+        : `${shortAddress(target.href)} · open it once to check`;
+      found.push(replaceWith('Use the address in the link text', target.href, note, false));
+      if (r.severity === 'unknown') r.message += ' The link text shows a different address.';
+    }
+  }
+
+  // Only for pages that are gone on a site that still works.
+  if (r.severity === 'error' && r.label === 'Broken' && url.pathname !== '/' && !SHORTENERS.test(url.hostname)) {
+    const home = await workingAddress(`${url.origin}/`, { remote: false });
+    if (home && !found.some((f) => sameAddress(f.to, home.href))) {
+      found.push(replaceWith('Use the site\'s home page', home.href, shortAddress(home.href), false));
+    }
+  }
+
+  if (!found.length) return r;
+  r.suggestions = [...found, ...r.suggestions];
+  return r;
+}
+
+/* ---------- entry point ---------- */
+
+async function checkOne(link, ctx, fetcher) {
   const { info } = link;
   switch (info.kind) {
     case 'skip':
       return result('skip', info.reason === 'anchor' ? 'Jump link' : info.reason, 'Not a web page, so it isn\'t checked.');
     case 'empty':
-      return { ...result('error', 'Empty link', 'This link has no address.'), suggestions: [UNLINK] };
+      return result('error', 'Empty link', 'This link has no address.');
     case 'invalid':
-      return { ...result('error', 'Invalid', 'This address isn\'t a valid URL.'), suggestions: [UNLINK] };
+      return result('error', 'Invalid', 'This address isn\'t a valid URL.');
     case 'editor': {
       if (!info.internal) {
         const target = `https://main--${info.repo}--${info.org}.aem.live${info.webPath}`;
@@ -313,7 +375,7 @@ export async function checkLink(link, ctx, fetcher) {
       if (r.severity === 'ok') r.message = 'Opens the editor, which readers can\'t use.';
       r.severity = 'error';
       r.label = 'Editor link';
-      r.suggestions = [replaceWith(`Use ${info.webPath}`, info.webPath, 'Link to the page itself'), ...r.suggestions.filter((s) => s.type === 'unlink')];
+      r.suggestions = [replaceWith(`Use ${info.webPath}`, info.webPath, 'Link to the page itself')];
       return r;
     }
     case 'localhost': {
@@ -327,7 +389,6 @@ export async function checkLink(link, ctx, fetcher) {
       if (exists === false) {
         const r = result('error', 'Broken', 'This page no longer exists, on the old or the new domain.');
         await addArchive(r, info.url.href, { offer: true });
-        r.suggestions.push(UNLINK);
         return r;
       }
       const r = result('warning', 'Old domain', 'Uses a retired hlx domain.');
@@ -358,4 +419,19 @@ export async function checkLink(link, ctx, fetcher) {
     default:
       return checkExternal(link);
   }
+}
+
+/**
+ * Checks one link.
+ * @param {object} link A link from extractLinks()
+ * @param {object} ctx Site context
+ * @param {Function} fetcher fetch() that adds the author's sign-in when available
+ * @returns {Promise<object>} The check result with suggestions
+ */
+export async function checkLink(link, ctx, fetcher) {
+  const r = await checkOne(link, ctx, fetcher);
+  if (['external', 'legacy'].includes(link.info.kind) && ['error', 'unknown'].includes(r.severity)) {
+    return addReplacements(r, link);
+  }
+  return r;
 }

@@ -35,6 +35,8 @@ const state = {
   editable: true,
   busy: false,
   confirm: null,
+  // The link whose "Update link" form is open (by key, which survives re-checks).
+  editing: null,
   undo: null,
   hold: null,
   error: null,
@@ -414,6 +416,7 @@ const ICONS = {
   external: '<path d="M9.5 2.5h4v4M13.5 2.5L7.5 8.5M11.5 9v4.5h-9v-9H7"/>',
   page: '<path d="M4 1.5h5l3 3v10H4z"/><path d="M9 1.5v3h3"/>',
   info: '<circle cx="8" cy="8" r="6.5"/><path d="M8 7.2v4M8 4.6v.1"/>',
+  edit: '<path d="M10.5 2.5l3 3L6 13H3v-3z"/><path d="M9 4l3 3"/>',
 };
 
 function icon(name, cls = '') {
@@ -504,8 +507,12 @@ function card(link, groupTitle) {
   const badge = res.label.toLowerCase() === groupTitle.toLowerCase() ? '' : `<span class="lr-badge">${esc(res.label)}</span>`;
   const disabled = state.busy || !state.editable ? ' disabled' : '';
   const suffix = link.pages.length > 1 ? ` on ${link.pages.length} pages` : '';
+  // Each fix shows where it leads (or why it's offered) under the button.
   const fixes = res.suggestions.map((s, i) => `
-    <button type="button" class="lr-btn ${i === 0 ? 'primary' : 'quiet'}" data-fix="${esc(link.id)}" data-index="${i}"${s.note ? ` title="${esc(s.note)}"` : ''}${disabled}>${esc(s.label)}${esc(suffix)}</button>`).join('');
+    <div class="lr-fix">
+      <button type="button" class="lr-btn ${i === 0 ? 'primary' : 'quiet'}" data-fix="${esc(link.id)}" data-index="${i}"${s.to ? ` title="${esc(s.to)}"` : ''}${disabled}>${esc(s.label)}${esc(suffix)}</button>
+      ${s.note ? `<span class="lr-note">${esc(s.note)}</span>` : ''}
+    </div>`).join('');
   const href = link.info.url?.href || link.href;
   return `
     <article class="lr-card lr-${res.severity}">
@@ -518,8 +525,30 @@ function card(link, groupTitle) {
       ${archiveLine(res)}
       ${pagesLine(link)}
       ${res.editPath && state.mode !== 'demo' ? `<a class="lr-action-link" href="${esc(editUrl(res.editPath))}" target="_blank" rel="noopener">Open that page to publish it</a>` : ''}
-      ${fixes ? `<div class="lr-fixes">${fixes}</div>` : ''}
+      ${state.editing === link.key ? editForm(link, suffix) : `
+      ${!fixes && res.severity === 'error' && !res.editPath ? '<p class="lr-note">No working replacement found. Update the link with an address you know works.</p>' : ''}
+      <div class="lr-fixes">${fixes}
+        <div class="lr-fix"><button type="button" class="lr-btn quiet lr-update" data-edit="${esc(link.key)}"${disabled}>${icon('edit')}Update link</button></div>
+      </div>`}
     </article>`;
+}
+
+/** The "Update link" form: like the editor's link dialog, for every page the link is on. */
+function editForm(link, suffix) {
+  const plainText = link.text || '';
+  return `<form class="lr-edit" data-key="${esc(link.key)}" novalidate>
+    <label>Address
+      <input name="href" type="text" inputmode="url" autocomplete="off" spellcheck="false" value="${esc(link.href)}" required>
+    </label>
+    <label>Link text
+      <input name="text" type="text" autocomplete="off" value="${esc(plainText)}" data-original="${esc(plainText)}">
+    </label>
+    <p class="lr-note lr-edit-error" role="alert" hidden></p>
+    <div class="lr-edit-actions">
+      <button type="submit" class="lr-btn primary"${state.busy ? ' disabled' : ''}>Save${esc(suffix)}</button>
+      <button type="button" class="lr-btn quiet" data-action="cancel-edit">Cancel</button>
+    </div>
+  </form>`;
 }
 
 /** The links to fix, in groups: broken, outdated, not confirmed. Links on the most pages first. */
@@ -595,7 +624,45 @@ function header(canRecheck) {
   </header>`;
 }
 
+/** Reads the open form, so a re-render (e.g. a check finishing) doesn't lose typing. */
+function readDraft() {
+  const form = app.querySelector('.lr-edit');
+  if (!form) return null;
+  const active = document.activeElement;
+  const focused = active?.matches?.('.lr-edit input') ? active.name : null;
+  return {
+    key: form.dataset.key,
+    href: form.elements.href.value,
+    text: form.elements.text.value,
+    focused,
+    selection: focused ? [active.selectionStart, active.selectionEnd] : null,
+  };
+}
+
+function restoreDraft(draft) {
+  const form = app.querySelector('.lr-edit');
+  if (!form) return;
+  if (draft && draft.key === form.dataset.key) {
+    form.elements.href.value = draft.href;
+    form.elements.text.value = draft.text;
+    if (draft.focused) {
+      const input = form.elements[draft.focused];
+      input.focus();
+      input.setSelectionRange(...draft.selection);
+    }
+  } else {
+    form.elements.href.focus();
+    form.elements.href.select();
+  }
+}
+
 function render() {
+  const draft = readDraft();
+  renderPanel();
+  restoreDraft(draft);
+}
+
+function renderPanel() {
   if (state.error) {
     app.innerHTML = `
       ${header(false)}
@@ -641,6 +708,12 @@ app.addEventListener('click', (e) => {
     if (link && suggestion) requestFixes([{ link, suggestion }]);
     return;
   }
+  const edit = e.target.closest('[data-edit]');
+  if (edit) {
+    state.editing = edit.dataset.edit;
+    render();
+    return;
+  }
   const scope = e.target.closest('[data-scope]');
   if (scope) {
     setScope(scope.dataset.scope);
@@ -654,9 +727,69 @@ app.addEventListener('click', (e) => {
     state.confirm = null;
     render();
   }
+  if (action === 'cancel-edit') {
+    state.editing = null;
+    render();
+  }
   if (action === 'demo') {
     state.error = null;
     startDemo();
+  }
+});
+
+function showEditError(form, message) {
+  const el = form.querySelector('.lr-edit-error');
+  el.textContent = message;
+  el.hidden = false;
+  form.elements.href.focus();
+}
+
+app.addEventListener('submit', (e) => {
+  const form = e.target.closest('.lr-edit');
+  if (!form) return;
+  e.preventDefault();
+  const link = state.links.find((l) => l.key === form.dataset.key);
+  if (!link) return;
+  const to = form.elements.href.value.trim();
+  const text = form.elements.text.value;
+  const textChanged = text !== form.elements.text.dataset.original;
+  if (!to) {
+    showEditError(form, 'Enter an address.');
+    return;
+  }
+  try {
+    // Relative addresses (/page) are fine; anything else must be a full web address.
+    const parsed = new URL(to, 'https://example.com');
+    if (!/^(https?|mailto|tel):$/.test(parsed.protocol)) throw new Error();
+  } catch {
+    showEditError(form, 'That isn\'t a valid web address.');
+    return;
+  }
+  if (to === link.href && !textChanged) {
+    state.editing = null;
+    render();
+    return;
+  }
+  const suggestion = {
+    type: 'replace', label: 'Update link', to, safe: false,
+  };
+  if (textChanged) {
+    suggestion.text = text;
+    suggestion.oldText = link.text;
+  }
+  state.editing = null;
+  requestFixes([{ link, suggestion }]);
+});
+
+app.addEventListener('input', (e) => {
+  const error = e.target.closest?.('.lr-edit')?.querySelector('.lr-edit-error');
+  if (error) error.hidden = true;
+});
+
+app.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && e.target.closest?.('.lr-edit')) {
+    state.editing = null;
+    render();
   }
 });
 

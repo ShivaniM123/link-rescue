@@ -41,7 +41,7 @@ In folder and site scans:
 
 | Finding | What it means | Fix offered |
 |---|---|---|
-| **Missing page** | There's no page at that address. Readers get "page not found". | The closest existing page (e.g. `/indx` → `/`), or remove the link and keep the text |
+| **Missing page** | There's no page at that address. Readers get "page not found". | The closest existing page (e.g. `/indx` → `/`) |
 | **Not published** | The page is only in preview. It works for you but not for readers. | A link to open that page so you can publish it |
 | **Draft only** | The page exists in the editor but hasn't been previewed or published. | A link to open that page |
 | **Redirects** | The page forwards to another one. | Link straight to the final page |
@@ -54,14 +54,14 @@ In folder and site scans:
 | **Preview link** | An `*.aem.page` link that sends readers to the preview site. | A relative link that works on preview and live |
 | **Old domain** | A retired `hlx.page` / `hlx.live` address. | The same address on `aem.page` / `aem.live` |
 | **Local address** | A `localhost` link copied from someone's own computer. | The page on the site |
-| **Empty or invalid link** | A link with no address, or an address that isn't a URL. | Remove the link, keep the text |
+| **Empty or invalid link** | A link with no address, or an address that isn't a URL. | Flagged so you can edit it |
 
 ### 4. Links to other websites
 
 | Finding | What it means | Fix offered |
 |---|---|---|
-| **Broken** | The page is gone (404 / 410), including broken short links such as bit.ly. | **The archived copy from the Wayback Machine**, or remove the link |
-| **Unreachable** | The site can't be reached. The domain may have shut down. | **The archived copy from the Wayback Machine**, or remove the link |
+| **Broken** | The page is gone (404 / 410), including broken short links such as bit.ly. | **The address in the link text** (when it's a working web address), **the archived copy from the Wayback Machine**, or **the site's home page** |
+| **Unreachable** | The site can't be reached. The domain may have shut down. | **The archived copy from the Wayback Machine** |
 | **Timed out** | The site took too long to answer. | The archived copy from the Wayback Machine |
 | **Moved** | The page now redirects to a new address. | The new address |
 | **Not secure** | An `http://` link. Link Rescue checks whether the `https://` version works. | Switch to `https://` |
@@ -83,10 +83,15 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 - When the day's free checks are used up, the panel says so, and those links show as **Not confirmed** until the next day.
 
 ### 7. Fixing
+- **Suggested replacement links** for broken external links, each checked before it's offered and shown under its button:
+  - **Use the address in the link text:** when the link text is itself a web address (e.g. text `https://www.aem.live/tutorial` on a broken bit.ly link), Link Rescue checks it and offers where it really leads (`www.aem.live/developer/tutorial`).
+  - **Use the archived copy:** from the Wayback Machine.
+  - **Use the site's home page:** when the page is gone but the site still works (not offered for short-link services like bit.ly).
 - **One-click fix** on every problem, with **Undo**. Undo also works for fixes that changed several pages.
 - **Apply N suggested fixes** applies every safe fix in one go. Safe fixes keep readers on the same content: old domains, editor and preview links, moved pages, `https://` and archived copies. It never guesses a different page for you.
 - **Confirm before changing other pages:** before a fix changes more than the open page, the panel shows "This changes links on N pages in Document Authoring. Nothing is published."
-- **Remove the link, keep the text** for links that can't be saved.
+- **Update link** on every card opens a small form, like the editor's link dialog, with **Address** and **Link text** already filled in. Save changes the link on every page it's on (with the same confirmation and Undo as other fixes). Invalid addresses are rejected, and links with bold text or images inside keep their formatting.
+- When no working replacement exists, the card says so: "No working replacement found. Update the link with an address you know works."
 - Link text that shows the old address is updated too.
 - Only the matching links change. The rest of each page stays exactly as it was.
 - Link Rescue never previews or publishes anything.

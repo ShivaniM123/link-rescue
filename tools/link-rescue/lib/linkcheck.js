@@ -71,6 +71,11 @@ export default async function remoteCheck(url) {
     return { failed: true };
   }
   store.urls[url] = { at: Date.now(), result };
+  // A working page reached by a redirect is known to work too, e.g. after it's suggested as a fix.
+  if (result.status < 400 && result.finalUrl && result.finalUrl !== url) {
+    const { status, finalUrl } = result;
+    store.urls[finalUrl] = { at: Date.now(), result: { status, finalUrl } };
+  }
   save(store);
   return result;
 }
