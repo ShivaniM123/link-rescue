@@ -211,7 +211,7 @@ async function addArchive(r, href, { offer }) {
   return r;
 }
 
-/** Turns a page status (from the browser, Edge Delivery or Microlink) into a result. */
+/** Turns a page status (from the browser, Edge Delivery or the link-check Worker) into a result. */
 async function fromStatus(href, status, finalUrl) {
   if (status === 404 || status === 410) {
     const r = result('error', status === 404 ? 'Not found' : 'Gone', `The page is gone (${status} ${status === 404 ? 'Not Found' : 'Gone'}).`);
@@ -258,7 +258,7 @@ async function checkExternal(link) {
   const p = await probe(href);
   if (p.confirmed) return fromStatus(href, p.status, p.redirected ? p.finalUrl : href);
 
-  // The browser couldn't see the page status: ask Microlink to load the page instead.
+  // The browser couldn't see the page status: ask the link-check Worker to load the page instead.
   const remote = await remoteCheck(href);
   if (remote.status) return fromStatus(href, remote.status, remote.finalUrl);
   if (remote.unreachable || (!p.reachable && !p.timeout)) {
@@ -266,14 +266,13 @@ async function checkExternal(link) {
     await addArchive(r, href, { offer: true });
     return r;
   }
-  const why = remote.limited ? ' Today\'s free checks are used up.' : '';
-  if (p.timeout) {
+  if (p.timeout || remote.timedOut) {
     const r = result('warning', 'Timed out', 'The site took too long to answer. It may be down.');
     return addArchive(r, href, { offer: true });
   }
   // The site answers, but it hides the page status from the browser: it may still be a 404.
   return addArchive(
-    result('unknown', 'Not confirmed', `${url.hostname} hides page status from the browser.${why} Open it once to check.`),
+    result('unknown', 'Not confirmed', `${url.hostname} hides page status from the browser, and the link check couldn't be reached. Open it once to check.`),
     href,
     { offer: false },
   );

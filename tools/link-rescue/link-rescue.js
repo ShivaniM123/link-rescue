@@ -586,8 +586,10 @@ function verdict(c) {
   }
   const on = state.scope === 'page' ? '' : ` across ${scopeName()}`;
   const broken = c.error + c.warning;
-  if (broken) return { cls: 'error', title: `${plural(broken, 'broken link')}${on}`, text: 'Fix them before you publish.' };
-  return { cls: 'ok', title: `All links look good${on}`, text: 'Safe to publish.' };
+  // Links that couldn't be checked aren't listed, but the summary says how many there are.
+  const unchecked = c.unknown ? ` ${plural(c.unknown, 'link')} couldn't be checked.` : '';
+  if (broken) return { cls: 'error', title: `${plural(broken, 'broken link')}${on}`, text: `Fix them before you publish.${unchecked}` };
+  return { cls: 'ok', title: `All links look good${on}`, text: unchecked ? unchecked.trim() : 'Safe to publish.' };
 }
 
 function stats(c) {

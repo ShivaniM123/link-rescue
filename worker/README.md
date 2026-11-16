@@ -23,6 +23,6 @@ Add `?checker=<Worker address>` to the Link Rescue row in the site's **library**
 https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/link-rescue.html?checker=https://link-rescue.<your-subdomain>.workers.dev
 ```
 
-Reload Experience Workspace. Links the browser can't check are then sent to your Worker instead of Microlink, with no daily limit.
+Reload Experience Workspace. Links the browser can't check are then sent to your Worker. (This site's Worker is already built into `tools/link-rescue/lib/linkcheck.js` as the default.)
 
 No key or password is needed anywhere: the Worker address is the only setting.

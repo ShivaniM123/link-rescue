@@ -7,8 +7,7 @@ Link Rescue is an Experience Workspace (da.live) extension. It opens as a side p
 | | |
 |---|---|
 | Third parties | [Internet Archive – Wayback Machine](https://archive.org/help/wayback_api.php) (Availability API, free, no key): archived copies of dead pages |
-| | [Microlink](https://microlink.io/) (free plan, no key): confirms the real status of pages on sites that hide it from the browser, such as bit.ly |
-| | Optional: your own free [Cloudflare Worker](../../worker/README.md) instead of Microlink, with no daily limit |
+| | [Cloudflare Workers](../../worker/README.md) (free plan): a small link-check service that confirms the real status of pages on sites that hide it from the browser, such as bit.ly |
 | Panel | https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/link-rescue.html |
 | Demo | https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/link-rescue.html?demo |
 
@@ -76,11 +75,11 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 - Every external link shows whether a backup exists ("Archived 5 Sep 2017 · View copy").
 - Links that already point to a Wayback Machine copy are recognised as safe.
 
-### 6. Microlink status check
-- Some sites, such as bit.ly and many company sites, don't let a browser see whether a page exists. For those links, Microlink loads the page on its servers and returns the real status. That's how a broken bit.ly link shows as **Broken**.
+### 6. Link check on Cloudflare
+- Some sites, such as bit.ly and many company sites, don't let a browser see whether a page exists. For those links, the site's Cloudflare Worker loads the page on Cloudflare's servers and returns the real status. That's how a broken bit.ly link shows as **Broken**.
 - It also reports where moved pages now lead, and which sites can't be reached.
-- Only links the browser can't confirm are sent to Microlink, and each answer is remembered for a day. That makes the free plan go further.
-- When the day's free checks are used up, links on those sites can't be checked until the next day. They aren't listed, because they may well work; only links with a confirmed problem are shown.
+- Only links the browser can't confirm are sent to the Worker, and each answer is remembered for a day. The free plan allows about 100,000 checks a day.
+- If the Worker can't be reached (for example on a network that blocks `workers.dev`), those links aren't listed, because they may well work, but the summary says how many couldn't be checked (e.g. "1 link couldn't be checked").
 
 ### 7. Fixing
 - **Suggested replacement links** for broken external links, each checked before it's offered and shown next to its button:
@@ -115,7 +114,7 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 |---|---|
 | Pages on your site | The site's publishing status (`admin.hlx.page`) and the page source (`admin.da.live`) |
 | Folder scans and the page list | The Document Authoring page list (`admin.da.live/list`) |
-| External links | A browser request reads the status when the site allows it. Otherwise **Microlink** loads the page and returns the real status. |
+| External links | A browser request reads the status when the site allows it. Otherwise the **Cloudflare Worker** loads the page and returns the real status. |
 | Archived copies | **Wayback Machine** Availability API |
 
 When you click a fix:
@@ -141,12 +140,12 @@ When you click a fix:
 Options (add them to the panel address as query parameters):
 
 - `hosts=www.example.com,example.com`: production domains that count as this site.
-- `checker=…`: Link Rescue uses this site's link-check Worker (`https://link-rescue.shanukakhani.workers.dev`, set in `tools/link-rescue/lib/linkcheck.js`). Use `checker=<another Worker address>` to use a different one, or `checker=microlink` to use Microlink instead (see [../../worker/README.md](../../worker/README.md)).
+- `checker=…`: Link Rescue uses this site's link-check Worker (`https://link-rescue.shanukakhani.workers.dev`, set in `tools/link-rescue/lib/linkcheck.js`). Use `checker=<another Worker address>` to use a different one (see [../../worker/README.md](../../worker/README.md)).
 - `demo`: always show the demo pages.
 
 ## Limits and next steps
 
-- **Microlink free plan:** about 5 checks a day per person. That's enough for a page, not for a full site scan. The free **Cloudflare Worker** in [`worker/`](../../worker/README.md) removes the limit. This site's Worker is already set up and used by default.
+- **Link checks on Cloudflare's free plan:** about 100,000 a day, so even full scans fit easily. See [`worker/`](../../worker/README.md) to set up a Worker for another site.
 - **Site scans** cover up to 500 pages.
 - **Possible next steps:** check images as well as links, and send a scheduled site-wide report.
 
@@ -165,7 +164,7 @@ tools/link-rescue/
   lib/site.js        lists and reads pages for folder scans and Select pages
   lib/fixes.js       applies a fix to the page HTML
   lib/wayback.js     Wayback Machine integration
-  lib/linkcheck.js   Microlink integration
+  lib/linkcheck.js   Cloudflare Worker link check
   demo/sample.html   demo page with one example of each problem
   demo/about.html    second demo page, for folder scans and Select pages
 worker/
