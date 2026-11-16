@@ -29,12 +29,16 @@ const state = {
   scope: 'page',
   pageHtml: '',
   // Folder and site scans: web path -> links on that page.
-  scans: { folder: null, site: null },
+  scans: { folder: null, pick: null },
+  // "Select pages": the site's pages, the ones ticked, the search, and whether the list is open.
+  picker: {
+    status: 'idle', pages: [], selected: new Set(), filter: '', open: false, truncated: false,
+  },
   links: [],
   // Link lists from the last check, per scope. Checks only run on open and on "Check again".
   lists: {},
   // Links fixed since the last check, per scope: they drop off the list without a new check.
-  fixed: { page: new Set(), folder: new Set(), site: new Set() },
+  fixed: { page: new Set(), folder: new Set(), pick: new Set() },
   // The addresses on the open page at the last check, to notice when the page changes.
   checkedHrefs: null,
   changed: false,
@@ -111,7 +115,7 @@ function toast(message, action) {
 async function readPage(path) {
   if (state.mode === 'demo') {
     if (path === state.ctx.path && state.pageHtml) return state.pageHtml;
-    const scanned = state.scans.site?.html.get(path) ?? state.scans.folder?.html.get(path);
+    const scanned = state.scans.pick?.html.get(path) ?? state.scans.folder?.html.get(path);
     if (scanned !== undefined) return scanned;
     const resp = await fetch(new URL(`./demo/${DEMO_PAGES[path]}`, import.meta.url));
     return resp.text();
@@ -135,7 +139,7 @@ async function writePage(path, html) {
 /** Stores a page's HTML everywhere it's used (the link lists only change on a check). */
 function storePage(path, html) {
   if (path === state.ctx.path) state.pageHtml = html;
-  ['folder', 'site'].forEach((scope) => {
+  ['folder', 'pick'].forEach((scope) => {
     const run = state.scans[scope];
     if (run?.html.has(path)) run.html.set(path, html);
   });
@@ -247,7 +251,7 @@ function folderPath() {
   return folderOf(state.ctx.path);
 }
 
-async function scan(scope) {
+async function scan(scope, chosen) {
   const folder = scope === 'folder' ? folderPath() : '';
   const run = {
     status: 'listing', found: 0, read: 0, total: 0, html: new Map(), truncated: false, failed: [],
@@ -256,7 +260,9 @@ async function scan(scope) {
   render();
   try {
     let pages;
-    if (state.mode === 'demo') {
+    if (chosen) {
+      pages = chosen;
+    } else if (state.mode === 'demo') {
       pages = Object.keys(DEMO_PAGES).filter((p) => p.startsWith(`${folder}/`));
     } else {
       const listed = await listPages(folder, state.ctx, fetcher, (found) => {
@@ -301,14 +307,60 @@ function setScope(scope) {
   // A scope is checked the first time it's opened; after that it shows its last check.
   if (!state.lists[scope]) {
     if (scope === 'page') check('page');
+    else if (scope === 'pick') openPicker();
     else if (!state.scans[scope]) scan(scope);
   }
   render();
 }
 
+/* ---------- "Select pages" ---------- */
+
+async function openPicker() {
+  const { picker } = state;
+  picker.open = true;
+  picker.filter = '';
+  render();
+  if (picker.status === 'ready' || picker.status === 'loading') return;
+  picker.status = 'loading';
+  picker.found = 0;
+  render();
+  try {
+    if (state.mode === 'demo') {
+      picker.pages = Object.keys(DEMO_PAGES).sort();
+    } else {
+      const listed = await listPages('', state.ctx, fetcher, (found) => {
+        picker.found = found;
+        render();
+      });
+      picker.pages = listed.pages;
+      picker.truncated = listed.truncated;
+    }
+    if (!picker.pages.includes(state.ctx.path)) picker.pages.unshift(state.ctx.path);
+    if (!picker.selected.size) picker.selected.add(state.ctx.path);
+    picker.status = 'ready';
+  } catch (e) {
+    picker.status = 'error';
+    picker.error = e.message;
+  }
+  render();
+}
+
+function pickerMatches(path) {
+  const q = state.picker.filter.trim().toLowerCase();
+  return !q || path.toLowerCase().includes(q);
+}
+
+function checkPicked() {
+  const { picker } = state;
+  if (!picker.selected.size) return;
+  picker.open = false;
+  scan('pick', picker.pages.filter((pg) => picker.selected.has(pg)));
+}
+
 function recheck() {
   state.results.clear();
   if (state.scope === 'page') check('page');
+  else if (state.scope === 'pick') checkPicked();
   else scan(state.scope);
 }
 
@@ -644,7 +696,7 @@ function scopeTabs() {
   const folder = folderPath();
   const options = [['page', 'This page']];
   if (folder) options.push(['folder', `Folder ${folder}`]);
-  options.push(['site', 'All pages']);
+  options.push(['pick', 'Select pages']);
   return `<div class="lr-scope" role="radiogroup" aria-label="What to check">${options.map(([value, label]) => `
     <button type="button" role="radio" data-scope="${value}" aria-checked="${state.scope === value}" title="${esc(label)}"${state.busy ? ' disabled' : ''}>${esc(label)}</button>`).join('')}
   </div>`;
@@ -676,7 +728,9 @@ function confirmBar() {
 }
 
 function header(canRecheck) {
-  const where = state.scope === 'page' ? state.ctx?.path : `${folderPath() && state.scope === 'folder' ? folderPath() : 'Whole site'}`;
+  let where = state.ctx?.path;
+  if (state.scope === 'folder') where = folderPath();
+  if (state.scope === 'pick') where = plural(state.picker.selected.size, 'selected page');
   return `<header class="lr-head">
     <span class="lr-logo" aria-hidden="true"></span>
     <div class="lr-title">
@@ -721,8 +775,74 @@ function restoreDraft(draft) {
 
 function render() {
   const draft = readDraft();
+  const active = document.activeElement;
+  const search = active?.matches?.('.lr-picker-search') ? [active.selectionStart, active.selectionEnd] : null;
+  const list = app.querySelector('.lr-picker-list');
+  const scroll = list ? list.scrollTop : 0;
   renderPanel();
   restoreDraft(draft);
+  const newList = app.querySelector('.lr-picker-list');
+  if (newList) newList.scrollTop = scroll;
+  if (search) {
+    const input = app.querySelector('.lr-picker-search');
+    input?.focus();
+    input?.setSelectionRange(...search);
+  }
+}
+
+function pickerView() {
+  const { picker } = state;
+  if (picker.status === 'loading' || picker.status === 'idle') {
+    return `<section class="lr-verdict lr-pending">${icon('pending', 'lr-verdict-icon')}<div><strong>Finding pages…</strong><span>${picker.found || 0} so far</span></div></section>${skeleton()}`;
+  }
+  if (picker.status === 'error') {
+    return `<section class="lr-verdict lr-error">${icon('error', 'lr-verdict-icon')}<div><strong>The pages couldn't be listed</strong><span>${esc(picker.error)}</span></div></section>`;
+  }
+  const n = picker.selected.size;
+  const shown = picker.pages.filter(pickerMatches);
+  const items = picker.pages.map((pg) => `
+    <li${pickerMatches(pg) ? '' : ' hidden'}><label>
+      <input type="checkbox" data-pick="${esc(pg)}"${picker.selected.has(pg) ? ' checked' : ''}>
+      ${icon('page')}<span>${esc(pg)}</span>${pg === state.ctx.path ? '<em>this page</em>' : ''}
+    </label></li>`).join('');
+  return `<section class="lr-picker" aria-label="Choose pages to check">
+    <div class="lr-picker-head"><strong>Choose pages to check</strong><span class="lr-picker-count">${n} of ${picker.pages.length} selected</span></div>
+    <input type="search" class="lr-picker-search" placeholder="Search pages" value="${esc(picker.filter)}" aria-label="Search pages">
+    <div class="lr-picker-tools">
+      <button type="button" class="lr-link-btn" data-action="pick-all">Select all${picker.filter ? ' shown' : ''}</button>
+      <button type="button" class="lr-link-btn" data-action="pick-none">Clear</button>
+    </div>
+    <ul class="lr-picker-list">${items}</ul>
+    <p class="lr-note lr-picker-empty"${shown.length ? ' hidden' : ''}>No pages match.</p>
+    ${picker.truncated ? `<p class="lr-note">Only the first ${MAX_PAGES} pages are listed.</p>` : ''}
+    <div class="lr-picker-actions">
+      <button type="button" class="lr-btn primary" data-action="pick-check"${n ? '' : ' disabled'}>Check ${plural(n, 'page')}</button>
+      ${state.lists.pick ? '<button type="button" class="lr-btn quiet" data-action="pick-cancel">Cancel</button>' : ''}
+    </div>
+  </section>`;
+}
+
+/** Updates the picker's count and button without re-rendering (keeps focus and scroll). */
+function updatePicker() {
+  const { picker } = state;
+  const n = picker.selected.size;
+  const count = app.querySelector('.lr-picker-count');
+  if (count) count.textContent = `${n} of ${picker.pages.length} selected`;
+  const button = app.querySelector('[data-action="pick-check"]');
+  if (button) {
+    button.textContent = `Check ${plural(n, 'page')}`;
+    button.disabled = !n;
+  }
+  const all = app.querySelector('[data-action="pick-all"]');
+  if (all) all.textContent = `Select all${picker.filter ? ' shown' : ''}`;
+  let shown = 0;
+  app.querySelectorAll('.lr-picker-list li').forEach((li) => {
+    const match = pickerMatches(li.querySelector('[data-pick]').dataset.pick);
+    li.hidden = !match;
+    if (match) shown += 1;
+  });
+  const empty = app.querySelector('.lr-picker-empty');
+  if (empty) empty.hidden = shown > 0;
 }
 
 function renderPanel() {
@@ -731,6 +851,14 @@ function renderPanel() {
       ${header(false)}
       <section class="lr-verdict lr-error">${icon('error', 'lr-verdict-icon')}<div><strong>${esc(state.error.title)}</strong><span>${esc(state.error.text)}</span></div></section>
       <button type="button" class="lr-btn quiet" data-action="demo">Show the demo instead</button>`;
+    return;
+  }
+  if (state.scope === 'pick' && state.picker.open) {
+    app.innerHTML = `
+      ${header(false)}
+      ${state.mode === 'demo' ? notice('Demo pages. Open Link Rescue from Experience Workspace to check your own site.') : ''}
+      ${scopeTabs()}
+      ${pickerView()}`;
     return;
   }
   const c = counts();
@@ -749,6 +877,7 @@ function renderPanel() {
     ${!state.editable ? notice('You can view this page but not edit it, so fixes are turned off.') : ''}
     ${state.changed ? `<p class="lr-notice lr-changed">${icon('info')}<span>The page's links changed since the last check.</span><button type="button" class="lr-link-btn" data-action="recheck"${state.busy || c.pending ? ' disabled' : ''}>Check again</button></p>` : ''}
     ${scopeTabs()}
+    ${state.scope === 'pick' ? `<p class="lr-picked">${icon('page')}<span>${plural(state.picker.selected.size, 'page')} selected</span><button type="button" class="lr-link-btn" data-action="pick-open"${state.busy || scanning ? ' disabled' : ''}>Change pages</button></p>` : ''}
     <section class="lr-verdict lr-${v.cls}" aria-live="polite">
       ${icon(v.cls, 'lr-verdict-icon')}
       <div>
@@ -785,6 +914,22 @@ app.addEventListener('click', (e) => {
   }
   const action = e.target.closest('[data-action]')?.dataset.action;
   if (action === 'recheck') recheck();
+  if (action === 'pick-open') openPicker();
+  if (action === 'pick-check') checkPicked();
+  if (action === 'pick-cancel') {
+    state.picker.open = false;
+    render();
+  }
+  if (action === 'pick-all' || action === 'pick-none') {
+    state.picker.pages.filter(pickerMatches).forEach((pg) => {
+      if (action === 'pick-all') state.picker.selected.add(pg);
+      else state.picker.selected.delete(pg);
+    });
+    app.querySelectorAll('[data-pick]').forEach((box) => {
+      box.checked = state.picker.selected.has(box.dataset.pick);
+    });
+    updatePicker();
+  }
   if (action === 'bulk') requestFixes(bulkItems());
   if (action === 'confirm') applyFixes(state.confirm.items);
   if (action === 'cancel') {
@@ -845,7 +990,20 @@ app.addEventListener('submit', (e) => {
   requestFixes([{ link, suggestion }]);
 });
 
+app.addEventListener('change', (e) => {
+  const box = e.target.closest?.('[data-pick]');
+  if (!box) return;
+  if (box.checked) state.picker.selected.add(box.dataset.pick);
+  else state.picker.selected.delete(box.dataset.pick);
+  updatePicker();
+});
+
 app.addEventListener('input', (e) => {
+  if (e.target.matches?.('.lr-picker-search')) {
+    state.picker.filter = e.target.value;
+    updatePicker();
+    return;
+  }
   const error = e.target.closest?.('.lr-edit')?.querySelector('.lr-edit-error');
   if (error) error.hidden = true;
 });

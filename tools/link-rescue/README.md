@@ -1,13 +1,14 @@
 # Link Rescue – Experience Workspace extension
 
-**Find and fix broken links before you publish, on one page, a folder or the whole site, with one-click Wayback Machine rescue.**
+**Find and fix broken links before you publish, on one page, a folder or any pages you choose, with one-click Wayback Machine rescue.**
 
-Link Rescue is an Experience Workspace (da.live) extension. It opens as a side panel next to the page you're editing and checks every link on it. It can also scan a whole folder or the whole site. Each problem is explained in plain language and fixed in one click.
+Link Rescue is an Experience Workspace (da.live) extension. It opens as a side panel next to the page you're editing and checks every link on it. It can also scan a whole folder, or any pages you pick from the site. Each problem is explained in plain language and fixed in one click.
 
 | | |
 |---|---|
 | Third parties | [Internet Archive – Wayback Machine](https://archive.org/help/wayback_api.php) (Availability API, free, no key): archived copies of dead pages |
 | | [Microlink](https://microlink.io/) (free plan, no key): confirms the real status of pages on sites that hide it from the browser, such as bit.ly |
+| | Optional: your own free [Cloudflare Worker](../../worker/README.md) instead of Microlink, with no daily limit |
 | Panel | https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/link-rescue.html |
 | Demo | https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/link-rescue.html?demo |
 
@@ -30,9 +31,9 @@ Link Rescue catches all of these **before** the page goes live, and fixes them w
 |---|---|
 | **This page** (default) | The page open in Experience Workspace. Checked as soon as the panel opens. |
 | **Folder** | Every page in the open page's folder and its sub-folders. Shown when the page is inside a folder. |
-| **All pages** | Every page on the site, including nav and footer (up to 500 pages). |
+| **Select pages** | The pages you choose from a list of the site's pages (up to 500 listed, including nav and footer). Search the list, tick pages, use **Select all / Clear**, then **Check N pages**. The open page is ticked to start with, and **Change pages** reopens the list with your selection kept. |
 
-In folder and site scans:
+In folder and selected-page scans:
 - each link is listed once, with the pages it's on (for example "On 2 pages: /, /nav"),
 - each page opens in the editor with one click,
 - a fix is applied on every page that has the link.
@@ -95,25 +96,25 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 - Link Rescue never previews or publishes anything.
 
 ### 8. Panel experience
-- **Summary card** at the top with an icon and a one-line verdict, for example "4 broken links: fix them before you publish" or "All links look good: safe to publish". Folder and site scans add "across N pages".
+- **Summary card** at the top with an icon and a one-line verdict, for example "4 broken links: fix them before you publish" or "All links look good: safe to publish". Folder and selected-page scans add "across N pages".
 - **Stat tiles** for Broken and Working links.
 - **Apply N safe fixes** button right under the summary.
 - **One Broken links list.** Each card's badge says exactly what was found: Not found, Gone, Unreachable, Timed out, Missing page, Not published, Editor link, Preview link, Old domain, Moved, Not secure, Server error. The most serious problems come first, then links on the most pages, and fixed links drop off the list straight away.
 - **Compact cards:** link text, a problem badge, the address (opens in a new tab), one short sentence on what's wrong, and the fix buttons.
 - **Loading skeleton** and a progress bar while scanning ("Finding pages… / Reading pages 12 of 40 / Checking links 30 of 85").
 - **"Nothing to fix"** state when every link works.
-- **Checks only run when you ask:** when the panel opens, the first time you open Folder or All pages, and when you click **Check again** (the round button in the header). Fixes and Undo don't re-check anything: a fixed link just drops off the list. If you add, remove or change links in the editor, the panel shows "The page's links changed since the last check" with a **Check again** button, instead of re-checking on its own.
+- **Checks only run when you ask:** when the panel opens, the first time you open Folder, when you click **Check N pages** in Select pages, and when you click **Check again** (the round button in the header). Fixes and Undo don't re-check anything: a fixed link just drops off the list. If you add, remove or change links in the editor, the panel shows "The page's links changed since the last check" with a **Check again** button, instead of re-checking on its own.
 - Fixes are turned off when you can view a page but not edit it.
 - If the panel can't connect to the editor, it says so ("Couldn't connect to the editor") instead of showing the wrong page.
 - Light and dark mode, reduced motion, keyboard focus styles and screen-reader labels.
-- **Demo mode** (`?demo`), with two sample pages that cover every problem type, so folder and site scans can be shown without a real site.
+- **Demo mode** (`?demo`), with two sample pages that cover every problem type, so folder and selected-page scans can be shown without a real site.
 
 ## How it works
 
 | Check | Source |
 |---|---|
 | Pages on your site | The site's publishing status (`admin.hlx.page`) and the page source (`admin.da.live`) |
-| Folder and site scans | The Document Authoring page list (`admin.da.live/list`) |
+| Folder scans and the page list | The Document Authoring page list (`admin.da.live/list`) |
 | External links | A browser request reads the status when the site allows it. Otherwise **Microlink** loads the page and returns the real status. |
 | Archived copies | **Wayback Machine** Availability API |
 
@@ -140,11 +141,12 @@ When you click a fix:
 Options (add them to the panel address as query parameters):
 
 - `hosts=www.example.com,example.com`: production domains that count as this site.
+- `checker=https://link-rescue.<you>.workers.dev`: use your own link-check Worker instead of Microlink (see [../../worker/README.md](../../worker/README.md)).
 - `demo`: always show the demo pages.
 
 ## Limits and next steps
 
-- **Microlink free plan:** about 5 checks a day per person. That's enough for a page, not for a full site scan. A Microlink PRO key, or a small link-check service of your own (for example a Cloudflare Worker), removes the limit. Either plugs into `tools/link-rescue/lib/linkcheck.js`.
+- **Microlink free plan:** about 5 checks a day per person. That's enough for a page, not for a full site scan. The free **Cloudflare Worker** in [`worker/`](../../worker/README.md) removes the limit: set it up in the Cloudflare dashboard (about 10 minutes) and add `?checker=` to the panel address.
 - **Site scans** cover up to 500 pages.
 - **Possible next steps:** check images as well as links, and send a scheduled site-wide report.
 
@@ -160,12 +162,15 @@ tools/link-rescue/
   icon.svg           panel icon
   lib/links.js       finds links and works out their type
   lib/checks.js      checks each link and suggests fixes
-  lib/site.js        lists and reads pages for folder and site scans
+  lib/site.js        lists and reads pages for folder scans and Select pages
   lib/fixes.js       applies a fix to the page HTML
   lib/wayback.js     Wayback Machine integration
   lib/linkcheck.js   Microlink integration
   demo/sample.html   demo page with one example of each problem
-  demo/about.html    second demo page, for folder and site scans
+  demo/about.html    second demo page, for folder scans and Select pages
+worker/
+  link-check.js      optional Cloudflare Worker for link checks (not served by the site)
+  README.md          how to set it up in the Cloudflare dashboard
 ```
 
 ## Development

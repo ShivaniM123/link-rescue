@@ -204,6 +204,140 @@ a {
   box-shadow: var(--lr-shadow);
 }
 
+/* Select pages */
+.lr-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--lr-border);
+  border-radius: var(--lr-radius);
+  box-shadow: var(--lr-shadow);
+}
+
+.lr-picker-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.lr-picker-head span {
+  color: var(--lr-muted);
+  font-size: 12px;
+}
+
+.lr-picker-search {
+  width: 100%;
+  min-height: 32px;
+  padding: 5px 8px;
+  border: 1px solid var(--lr-border);
+  border-radius: 6px;
+  background: var(--lr-bg);
+  color: var(--lr-text);
+  font: 13px/1.3 var(--lr-font);
+}
+
+.lr-picker-search:focus {
+  border-color: var(--lr-accent);
+  outline: 2px solid var(--lr-accent-bg);
+}
+
+.lr-picker-tools {
+  display: flex;
+  gap: 14px;
+}
+
+.lr-picker-tools .lr-link-btn,
+.lr-picked .lr-link-btn {
+  color: var(--lr-accent);
+  font-size: 12px;
+}
+
+.lr-picker-list {
+  max-height: 320px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  border-top: 1px solid var(--lr-border);
+  list-style: none;
+}
+
+.lr-picker-list label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 7px 4px;
+  border-bottom: 1px solid var(--lr-border);
+  cursor: pointer;
+}
+
+.lr-picker-list label:hover {
+  background: var(--lr-surface);
+}
+
+.lr-picker-list input {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--lr-accent);
+}
+
+.lr-picker-list .lr-icon {
+  width: 13px;
+  height: 13px;
+  color: var(--lr-muted);
+}
+
+.lr-picker-list span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lr-picker-list em {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--lr-accent-bg);
+  color: var(--lr-accent);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.lr-picker-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.lr-picker-actions .lr-btn.primary {
+  flex: 1;
+  min-height: 34px;
+  text-align: center;
+}
+
+.lr-picked {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--lr-muted);
+  font-size: 12px;
+}
+
+.lr-picked .lr-icon {
+  width: 13px;
+  height: 13px;
+}
+
+.lr-picked span {
+  flex: 1;
+}
+
 /* Summary */
 .lr-verdict {
   display: flex;

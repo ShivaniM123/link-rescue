@@ -1,12 +1,39 @@
 /**
- * Microlink link check (https://microlink.io/docs/api/getting-started/overview).
- * Some sites hide page status from the browser. Microlink loads the page on its servers and
- * returns the real status, so a 404 on a site like bit.ly can be confirmed.
- * The free plan needs no key but allows only a few requests a day for each visitor,
- * so answers are cached for a day and only links the browser can't confirm are sent.
+ * Server-side link check, for sites that hide page status from the browser (e.g. bit.ly).
+ *
+ * - Your own link-check Worker (worker/link-check.js), when the panel address has
+ *   `?checker=https://link-rescue.<you>.workers.dev`. Free plan: ~100,000 checks a day.
+ * - Otherwise Microlink (https://microlink.io/), whose free plan needs no key but allows
+ *   only a few requests a day for each visitor.
+ * Answers are cached for a day and only links the browser can't confirm are sent.
  */
 
 const API = 'https://api.microlink.io/';
+
+/** The link-check Worker set on the panel address, if any. */
+function workerUrl() {
+  const value = new URLSearchParams(window.location.search).get('checker');
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+
+async function askWorker(base, url) {
+  try {
+    const resp = await fetch(`${base}/check?${new URLSearchParams({ url })}`, { signal: AbortSignal.timeout(20000) });
+    if (!resp.ok) return { failed: true };
+    const json = await resp.json();
+    if (json.status) return { status: json.status, finalUrl: json.finalUrl || url };
+    if (json.unreachable) return { unreachable: true };
+    return { failed: true };
+  } catch {
+    return { failed: true };
+  }
+}
 const CACHE_KEY = 'link-rescue:microlink';
 const DAY = 24 * 60 * 60 * 1000;
 const UNREACHABLE = ['EUNREACHABLE', 'ETIMEOUT', 'ENOTFOUND', 'EHOSTUNREACH'];
@@ -31,6 +58,16 @@ function save(store) {
   }
 }
 
+function remember(store, url, result) {
+  store.urls[url] = { at: Date.now(), result };
+  // A working page reached by a redirect is known to work too, e.g. after it's suggested as a fix.
+  if (result.status < 400 && result.finalUrl && result.finalUrl !== url) {
+    const { status, finalUrl } = result;
+    store.urls[finalUrl] = { at: Date.now(), result: { status, finalUrl } };
+  }
+  save(store);
+}
+
 /**
  * Asks Microlink for the real status of a page.
  * @param {string} url The address to check
@@ -44,6 +81,14 @@ export default async function remoteCheck(url) {
   const store = load();
   const cached = store.urls[url];
   if (cached && Date.now() - cached.at < DAY) return cached.result;
+
+  const worker = workerUrl();
+  if (worker) {
+    const answer = await askWorker(worker, url);
+    if (!answer.failed) remember(store, url, answer);
+    return answer;
+  }
+
   if (store.limitedUntil && Date.now() < store.limitedUntil) return { limited: true };
 
   let resp;
@@ -70,12 +115,6 @@ export default async function remoteCheck(url) {
   } else {
     return { failed: true };
   }
-  store.urls[url] = { at: Date.now(), result };
-  // A working page reached by a redirect is known to work too, e.g. after it's suggested as a fix.
-  if (result.status < 400 && result.finalUrl && result.finalUrl !== url) {
-    const { status, finalUrl } = result;
-    store.urls[finalUrl] = { at: Date.now(), result: { status, finalUrl } };
-  }
-  save(store);
+  remember(store, url, result);
   return result;
 }
