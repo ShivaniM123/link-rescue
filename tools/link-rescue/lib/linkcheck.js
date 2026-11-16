@@ -1,19 +1,23 @@
 /**
  * Server-side link check, for sites that hide page status from the browser (e.g. bit.ly).
  *
- * - Your own link-check Worker (worker/link-check.js), when the panel address has
- *   `?checker=https://link-rescue.<you>.workers.dev`. Free plan: ~100,000 checks a day.
- * - Otherwise Microlink (https://microlink.io/), whose free plan needs no key but allows
+ * - This site's link-check Worker (worker/link-check.js, DEFAULT_WORKER below), or another one
+ *   set with `?checker=https://link-rescue.<you>.workers.dev`. Free plan: ~100,000 checks a day.
+ * - Microlink (https://microlink.io/) with `?checker=microlink`; its free plan needs no key but allows
  *   only a few requests a day for each visitor.
  * Answers are cached for a day and only links the browser can't confirm are sent.
  */
 
 const API = 'https://api.microlink.io/';
 
-/** The link-check Worker set on the panel address, if any. */
+// This site's own link-check Worker (worker/link-check.js). `?checker=` on the panel address
+// overrides it, and `?checker=microlink` uses Microlink instead.
+const DEFAULT_WORKER = 'https://link-rescue.shanukakhani.workers.dev';
+
+/** The link-check Worker to use, or null for Microlink. */
 function workerUrl() {
-  const value = new URLSearchParams(window.location.search).get('checker');
-  if (!value) return null;
+  const value = new URLSearchParams(window.location.search).get('checker') || DEFAULT_WORKER;
+  if (value === 'microlink') return null;
   try {
     const url = new URL(value);
     return url.protocol === 'https:' ? url.origin : null;

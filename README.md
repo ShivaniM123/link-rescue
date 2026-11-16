@@ -141,12 +141,12 @@ When you click a fix:
 Options (add them to the panel address as query parameters):
 
 - `hosts=www.example.com,example.com`: production domains that count as this site.
-- `checker=https://link-rescue.<you>.workers.dev`: use your own link-check Worker instead of Microlink (see [worker/README.md](worker/README.md)).
+- `checker=…`: Link Rescue uses this site's link-check Worker (`https://link-rescue.shanukakhani.workers.dev`, set in `tools/link-rescue/lib/linkcheck.js`). Use `checker=<another Worker address>` to use a different one, or `checker=microlink` to use Microlink instead (see [worker/README.md](worker/README.md)).
 - `demo`: always show the demo pages.
 
 ## Limits and next steps
 
-- **Microlink free plan:** about 5 checks a day per person. That's enough for a page, not for a full site scan. The free **Cloudflare Worker** in [`worker/`](worker/README.md) removes the limit: set it up in the Cloudflare dashboard (about 10 minutes) and add `?checker=` to the panel address.
+- **Microlink free plan:** about 5 checks a day per person. That's enough for a page, not for a full site scan. The free **Cloudflare Worker** in [`worker/`](worker/README.md) removes the limit. This site's Worker is already set up and used by default.
 - **Site scans** cover up to 500 pages.
 - **Possible next steps:** check images as well as links, and send a scheduled site-wide report.
 
