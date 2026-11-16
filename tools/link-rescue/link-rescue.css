@@ -605,14 +605,6 @@ a {
   font-size: 14px;
 }
 
-.lr-foot {
-  padding-top: 10px;
-  border-top: 1px solid var(--lr-border);
-  color: var(--lr-muted);
-  font-size: 11px;
-  text-align: center;
-}
-
 /* Toast */
 .lr-toast {
   position: fixed;

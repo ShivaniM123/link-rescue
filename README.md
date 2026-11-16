@@ -93,7 +93,7 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 
 ### 8. Panel experience
 - **Summary card** at the top with an icon and a one-line verdict, for example "4 broken links: fix them before you publish", "No broken links: 2 links could be better" or "All links look good: safe to publish". Folder and site scans add "across N pages".
-- **Stat tiles** for Broken, Outdated, Unconfirmed and Working links.
+- **Stat tiles** for Broken, Outdated and Working links.
 - **Apply N safe fixes** button right under the summary.
 - **Grouped list:** **Broken** (readers hit a dead end), **Outdated** (works for now, but should be updated) and **Not confirmed** (open these once to check them). Links on the most pages come first, and fixed links drop off the list straight away.
 - **Compact cards:** link text, a problem badge, the address (opens in a new tab), one short sentence on what's wrong, and the fix buttons.

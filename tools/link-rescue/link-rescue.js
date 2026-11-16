@@ -498,8 +498,10 @@ function pagesLine(link) {
   return `<details class="lr-pages"${link.pages.length <= 3 ? ' open' : ''}><summary>On ${plural(link.pages.length, 'page')}</summary><ul>${shown}${more}</ul></details>`;
 }
 
-function card(link) {
+function card(link, groupTitle) {
   const res = resultFor(link);
+  // The group heading already says "Broken" or "Not confirmed": only show more specific labels.
+  const badge = res.label.toLowerCase() === groupTitle.toLowerCase() ? '' : `<span class="lr-badge">${esc(res.label)}</span>`;
   const disabled = state.busy || !state.editable ? ' disabled' : '';
   const suffix = link.pages.length > 1 ? ` on ${link.pages.length} pages` : '';
   const fixes = res.suggestions.map((s, i) => `
@@ -509,7 +511,7 @@ function card(link) {
     <article class="lr-card lr-${res.severity}">
       <div class="lr-card-top">
         <p class="lr-text">${esc(link.text || '(no link text)')}</p>
-        <span class="lr-badge">${esc(res.label)}</span>
+        ${badge}
       </div>
       <a class="lr-url" href="${esc(href)}" target="_blank" rel="noopener" title="${esc(link.href)}">${icon('external')}<span>${esc(link.href || '(empty)')}</span></a>
       <p class="lr-msg">${esc(res.message)}${link.count > 1 && state.scope === 'page' ? ` Used ${link.count} times on this page.` : ''}</p>
@@ -529,7 +531,7 @@ function groupedList() {
     if (!links.length) return '';
     return `<section class="lr-group lr-${g.severity}">
       <h2>${icon(g.severity)}${g.title} <b>${links.length}</b><span>${g.hint}</span></h2>
-      <div class="lr-list">${links.map(card).join('')}</div>
+      <div class="lr-list">${links.map((l) => card(l, g.title)).join('')}</div>
     </section>`;
   }).join('');
 }
@@ -628,8 +630,7 @@ function render() {
     ${scanNotes()}
     ${confirmBar()}
     ${bulk.length > 1 && !state.confirm ? `<button type="button" class="lr-btn primary lr-bulk" data-action="bulk"${state.busy || !state.editable ? ' disabled' : ''}>Apply ${bulk.length} safe fixes</button>` : ''}
-    ${body}
-    <footer class="lr-foot">Archived copies by the <a href="https://web.archive.org/" target="_blank" rel="noopener">Wayback Machine</a> · Link checks by <a href="https://microlink.io/" target="_blank" rel="noopener">Microlink</a></footer>`;
+    ${body}`;
 }
 
 app.addEventListener('click', (e) => {
