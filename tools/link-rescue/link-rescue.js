@@ -609,18 +609,51 @@ function stats(c) {
   </div>`;
 }
 
+/** The link text, and the address under it unless the text already is the address. */
+function textAndAddress(link) {
+  const href = link.info.url?.href || link.href;
+  const text = (link.text || '').trim();
+  const same = text && [link.href, href].some((h) => h && h.replace(/\/$/, '') === text.replace(/\/$/, ''));
+  if (same) {
+    return {
+      text: `<a class="lr-text lr-text-link" href="${esc(href)}" target="_blank" rel="noopener">${esc(text)}${icon('external')}</a>`,
+      address: '',
+    };
+  }
+  return {
+    text: `<p class="lr-text">${esc(text || '(no link text)')}</p>`,
+    address: `<a class="lr-url" href="${esc(href)}" target="_blank" rel="noopener" title="${esc(link.href)}">${icon('external')}<span>${esc(link.href || '(empty)')}</span></a>`,
+  };
+}
+
+/** Where a working redirect or short link sends readers. */
+function workingNote(link) {
+  const res = resultFor(link);
+  let note = res.label;
+  if (res.leadsTo) {
+    const to = esc(res.leadsTo.replace(/^https?:\/\//, ''));
+    const host = esc((link.info.url?.hostname || '').replace(/^www\./, ''));
+    note += res.label === 'Short link' ? ` · ${host} forwards readers to ${to}` : ` · forwards readers to ${to}`;
+  }
+  if (link.pages.length > 1) note += ` · on ${plural(link.pages.length, 'page')}`;
+  return note;
+}
+
 /** The links that work, listed on request (Working tile). */
 function workingList() {
   const links = visibleLinks()
     .filter((l) => resultFor(l)?.severity === 'ok')
     .sort((a, b) => b.pages.length - a.pages.length || a.href.localeCompare(b.href));
   if (!links.length) return '<p class="lr-empty-line">No working links found.</p>';
-  const rows = links.map((l) => `
+  const rows = links.map((l) => {
+    const { text, address } = textAndAddress(l);
+    return `
     <li>
-      <p class="lr-text">${esc(l.text || '(no link text)')}</p>
-      <a class="lr-url" href="${esc(l.info.url?.href || l.href)}" target="_blank" rel="noopener" title="${esc(l.href)}">${icon('external')}<span>${esc(l.href)}</span></a>
-      <span class="lr-note">${esc(resultFor(l).label)}${resultFor(l).leadsTo ? ` · leads to ${esc(resultFor(l).leadsTo.replace(/^https?:\/\//, ''))}` : ''}${l.pages.length > 1 ? ` · on ${plural(l.pages.length, 'page')}` : ''}</span>
-    </li>`).join('');
+      ${text}
+      ${address}
+      <span class="lr-note">${workingNote(l)}</span>
+    </li>`;
+  }).join('');
   return `<section class="lr-group lr-ok">
     <h2>${icon('ok')}Working links <b>${links.length}</b></h2>
     <ul class="lr-working">${rows}</ul>
@@ -656,14 +689,14 @@ function card(link, groupTitle) {
       <button type="button" class="lr-btn quiet" data-fix="${esc(link.id)}" data-index="${i}"${s.to ? ` title="${esc(s.to)}"` : ''}${disabled}>${esc(s.label)}${esc(suffix)}</button>
       ${s.note ? `<span class="lr-note">${esc(s.note)}</span>` : ''}
     </div>`).join('');
-  const href = link.info.url?.href || link.href;
+  const { text, address } = textAndAddress(link);
   return `
     <article class="lr-card lr-${res.severity}">
       <div class="lr-card-top">
-        <p class="lr-text">${esc(link.text || '(no link text)')}</p>
+        ${text}
         ${badge}
       </div>
-      <a class="lr-url" href="${esc(href)}" target="_blank" rel="noopener" title="${esc(link.href)}">${icon('external')}<span>${esc(link.href || '(empty)')}</span></a>
+      ${address}
       <p class="lr-msg">${esc(res.message)}${link.count > 1 && state.scope === 'page' ? ` Used ${link.count} times on this page.` : ''}</p>
       ${archiveLine(res)}
       ${pagesLine(link)}

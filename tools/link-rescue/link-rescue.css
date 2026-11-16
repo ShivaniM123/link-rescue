@@ -623,6 +623,26 @@ button.lr-stat[aria-selected="true"] {
   white-space: nowrap;
 }
 
+/* Link text that is the address itself: shown once, as the link */
+.lr-text-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--lr-text);
+  text-decoration: none;
+}
+
+.lr-text-link .lr-icon {
+  width: 11px;
+  height: 11px;
+  color: var(--lr-muted);
+}
+
+.lr-text-link:hover {
+  color: var(--lr-accent);
+  text-decoration: underline;
+}
+
 .lr-badge {
   flex-shrink: 0;
   padding: 1px 7px;
