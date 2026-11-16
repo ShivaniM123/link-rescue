@@ -214,7 +214,7 @@ async function addArchive(r, href, { offer }) {
 /** Turns a page status (from the browser, Edge Delivery or Microlink) into a result. */
 async function fromStatus(href, status, finalUrl) {
   if (status === 404 || status === 410) {
-    const r = result('error', 'Broken', `The page is gone (${status} ${status === 404 ? 'Not Found' : 'Gone'}).`);
+    const r = result('error', status === 404 ? 'Not found' : 'Gone', `The page is gone (${status} ${status === 404 ? 'Not Found' : 'Gone'}).`);
     await addArchive(r, href, { offer: true });
     return r;
   }
@@ -310,7 +310,7 @@ function shortAddress(href) {
  */
 async function addReplacements(r, link) {
   const { url } = link.info;
-  if (r.label !== 'Broken' || url.pathname === '/' || SHORTENERS.test(url.hostname)) return r;
+  if (!['Not found', 'Gone'].includes(r.label) || url.pathname === '/' || SHORTENERS.test(url.hostname)) return r;
   const home = await workingAddress(`${url.origin}/`);
   if (home && !r.suggestions.some((sg) => sameAddress(sg.to, home))) {
     r.suggestions = [replaceWith('Use the site\'s home page', home, shortAddress(home), false), ...r.suggestions];
@@ -352,7 +352,7 @@ async function checkOne(link, ctx, fetcher) {
       const next = new URL(modernizeLegacy(info.url));
       const exists = await edsPageExists(next);
       if (exists === false) {
-        const r = result('error', 'Broken', 'This page no longer exists, on the old or the new domain.');
+        const r = result('error', 'Not found', 'This page no longer exists, on the old or the new domain.');
         await addArchive(r, info.url.href, { offer: true });
         return r;
       }

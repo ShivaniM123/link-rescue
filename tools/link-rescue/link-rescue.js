@@ -489,11 +489,10 @@ function icon(name, cls = '') {
   return `<svg class="lr-icon ${cls}" viewBox="0 0 16 16" aria-hidden="true">${ICONS[name]}</svg>`;
 }
 
-const GROUPS = [
-  { severity: 'error', title: 'Broken', hint: 'Readers hit a dead end' },
-  { severity: 'warning', title: 'Outdated', hint: 'Work for now, but should be updated' },
-  { severity: 'unknown', title: 'Not confirmed', hint: 'Open these once to check them' },
-];
+// One list of links to fix; each card's badge says what was found (Not found, Old domain, Moved…).
+// Links whose status couldn't be checked aren't listed: they may well work.
+const TO_FIX = ['error', 'warning'];
+const BROKEN_TITLE = 'Broken links';
 
 function counts() {
   const c = {
@@ -534,16 +533,14 @@ function verdict(c) {
     };
   }
   const on = state.scope === 'page' ? '' : ` across ${scopeName()}`;
-  if (c.error) return { cls: 'error', title: `${plural(c.error, 'broken link')}${on}`, text: 'Fix them before you publish.' };
-  if (c.warning) return { cls: 'warning', title: `No broken links${on}`, text: `${plural(c.warning, 'link')} could be better.` };
-  if (c.unknown) return { cls: 'unknown', title: `No broken links found${on}`, text: `${plural(c.unknown, 'link')} couldn't be confirmed. Open them once to check.` };
+  const broken = c.error + c.warning;
+  if (broken) return { cls: 'error', title: `${plural(broken, 'broken link')}${on}`, text: 'Fix them before you publish.' };
   return { cls: 'ok', title: `All links look good${on}`, text: 'Safe to publish.' };
 }
 
 function stats(c) {
   const tiles = [
-    ['error', 'Broken', c.error],
-    ['warning', 'Outdated', c.warning],
+    ['error', 'Broken', c.error + c.warning],
     ['ok', 'Working', c.ok],
   ];
   return `<dl class="lr-stats">${tiles.map(([cls, label, n]) => `
@@ -620,16 +617,15 @@ function editForm(link, suffix) {
 
 /** The links to fix, in groups: broken, outdated, not confirmed. Links on the most pages first. */
 function groupedList() {
-  return GROUPS.map((g) => {
-    const links = visibleLinks()
-      .filter((l) => resultFor(l)?.severity === g.severity)
-      .sort((a, b) => b.pages.length - a.pages.length || b.count - a.count);
-    if (!links.length) return '';
-    return `<section class="lr-group lr-${g.severity}">
-      <h2>${icon(g.severity)}${g.title} <b>${links.length}</b><span>${g.hint}</span></h2>
-      <div class="lr-list">${links.map((l) => card(l, g.title)).join('')}</div>
-    </section>`;
-  }).join('');
+  const links = visibleLinks()
+    .filter((l) => TO_FIX.includes(resultFor(l)?.severity))
+    .sort((a, b) => TO_FIX.indexOf(resultFor(a).severity) - TO_FIX.indexOf(resultFor(b).severity)
+      || b.pages.length - a.pages.length || b.count - a.count);
+  if (!links.length) return '';
+  return `<section class="lr-group lr-error">
+    <h2>${icon('error')}${BROKEN_TITLE} <b>${links.length}</b><span>Fix these before you publish</span></h2>
+    <div class="lr-list">${links.map((l) => card(l, BROKEN_TITLE)).join('')}</div>
+  </section>`;
 }
 
 function skeleton() {
@@ -743,7 +739,7 @@ function renderPanel() {
   const checked = ready && state.links.length && !c.pending;
   const bulk = checked ? bulkItems() : [];
   const scanning = !ready && state.scans[state.scope]?.status !== 'error';
-  const toFix = c.error + c.warning + c.unknown;
+  const toFix = c.error + c.warning;
   let body = '';
   if (checked) body = toFix ? groupedList() : allGood(c);
   else if (scanning || c.pending || (state.scope === 'page' && !state.pageHtml)) body = skeleton();

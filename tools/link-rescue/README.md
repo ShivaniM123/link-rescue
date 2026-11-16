@@ -67,7 +67,6 @@ In folder and site scans:
 | **Not secure** | An `http://` link. Link Rescue checks whether the `https://` version works. | Switch to `https://` |
 | **Server error** | The site answered with a 5xx error. It may be down for now. | The archived copy from the Wayback Machine |
 | **Refused** | The site refused the request (e.g. 401 / 403, it needs a login). | Flagged for review |
-| **Not confirmed** | The page's status couldn't be confirmed, for example once the day's free Microlink checks are used up. | Listed under **Links to fix** so you open it once. It's never shown as working. |
 
 Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not checked.
 
@@ -80,7 +79,7 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 - Some sites, such as bit.ly and many company sites, don't let a browser see whether a page exists. For those links, Microlink loads the page on its servers and returns the real status. That's how a broken bit.ly link shows as **Broken**.
 - It also reports where moved pages now lead, and which sites can't be reached.
 - Only links the browser can't confirm are sent to Microlink, and each answer is remembered for a day. That makes the free plan go further.
-- When the day's free checks are used up, the panel says so, and those links show as **Not confirmed** until the next day.
+- When the day's free checks are used up, links on those sites can't be checked until the next day. They aren't listed, because they may well work; only links with a confirmed problem are shown.
 
 ### 7. Fixing
 - **Suggested replacement links** for broken external links, each checked before it's offered and shown next to its button:
@@ -96,10 +95,10 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 - Link Rescue never previews or publishes anything.
 
 ### 8. Panel experience
-- **Summary card** at the top with an icon and a one-line verdict, for example "4 broken links: fix them before you publish", "No broken links: 2 links could be better" or "All links look good: safe to publish". Folder and site scans add "across N pages".
-- **Stat tiles** for Broken, Outdated and Working links.
+- **Summary card** at the top with an icon and a one-line verdict, for example "4 broken links: fix them before you publish" or "All links look good: safe to publish". Folder and site scans add "across N pages".
+- **Stat tiles** for Broken and Working links.
 - **Apply N safe fixes** button right under the summary.
-- **Grouped list:** **Broken** (readers hit a dead end), **Outdated** (works for now, but should be updated) and **Not confirmed** (open these once to check them). Links on the most pages come first, and fixed links drop off the list straight away.
+- **One Broken links list.** Each card's badge says exactly what was found: Not found, Gone, Unreachable, Timed out, Missing page, Not published, Editor link, Preview link, Old domain, Moved, Not secure, Server error. The most serious problems come first, then links on the most pages, and fixed links drop off the list straight away.
 - **Compact cards:** link text, a problem badge, the address (opens in a new tab), one short sentence on what's wrong, and the fix buttons.
 - **Loading skeleton** and a progress bar while scanning ("Finding pages… / Reading pages 12 of 40 / Checking links 30 of 85").
 - **"Nothing to fix"** state when every link works.
