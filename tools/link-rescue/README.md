@@ -18,6 +18,16 @@ A broken link is one of the most common mistakes on a published page, and nothin
 - an external site moves a page or shuts down,
 - an old link still uses the retired `hlx.page` / `hlx.live` domains.
 
+## What to check
+
+| Scope | What's checked |
+|---|---|
+| **This page** | The page open in Experience Workspace, as soon as the panel opens and again as you edit |
+| **Folder** | Every page in the open page's folder and its sub-folders (shown when the page is inside a folder) |
+| **All pages** | Every page on the site, including nav and footer (up to 500 pages) |
+
+In folder and site scans, each link is listed once with the pages it's on. A fix is applied on every one of those pages. Before Link Rescue changes more than the open page, it asks you to confirm.
+
 ## What it checks
 
 | Finding | How it's detected | One-click fix |
@@ -39,9 +49,9 @@ The verdict at the top says whether the page is safe to publish. **Apply suggest
 
 ## How fixes are applied
 
-1. Link Rescue asks the editor to save.
-2. It reads the saved page and changes only the matching `<a href>` values. If the link text shows the old address, the text is updated too.
-3. It writes the page back with the author's own sign-in. Document Authoring pushes the change into the open editor straight away.
+1. If the open page is affected, Link Rescue asks the editor to save it first.
+2. For each affected page, it reads the saved page and changes only the matching `<a href>` values. If the link text shows the old address, the text is updated too.
+3. It writes each page back with the author's own sign-in. Document Authoring pushes the change into any open editor straight away.
 
 Nothing is previewed or published by Link Rescue.
 
@@ -53,9 +63,10 @@ Nothing is previewed or published by Link Rescue.
 
    | title | path | icon | experience |
    |---|---|---|---|
-   | Link Rescue | `https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/link-rescue.html` | `https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/icon.svg` | panel |
+   | Link Rescue | `https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/link-rescue.html` | `https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/icon.svg` | `inline` |
 
-3. Open any page in Experience Workspace and open **Link Rescue**.
+   If the site has no config or no `library` sheet yet, add it with the **+** button next to the sheet tabs. `inline` opens the extension as a side panel next to the page.
+3. Save the config, reload Experience Workspace, open any page and choose **Extensions → Link Rescue**.
 
 Options (add them to the path as query parameters):
 
@@ -65,7 +76,7 @@ Options (add them to the path as query parameters):
 ## Limits and next steps
 
 - Browsers only show the status of a page on another site if that site allows it (CORS). For other sites, Link Rescue can still tell whether the site answers. Dead domains and timeouts are found, but a 404 on such a site shows as "Site responds". A small link-check service (for example a Cloudflare Worker) would remove this limit. The code has one place to plug it in: `probe()` in `lib/checks.js`.
-- Possible next steps: check every page on the site, images as well as links, and a scheduled report.
+- Possible next steps: images as well as links, and a scheduled site-wide report.
 
 ## Files
 
@@ -78,5 +89,7 @@ tools/link-rescue/
   lib/checks.js      checks each link and suggests fixes
   lib/wayback.js     Wayback Machine integration
   lib/fixes.js       applies a fix to the page HTML
+  lib/site.js        lists and reads pages for folder and site scans
   demo/sample.html   demo page with one example of each problem
+  demo/about.html    second demo page, for folder and site scans
 ```

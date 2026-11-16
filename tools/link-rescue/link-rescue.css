@@ -186,6 +186,78 @@ a {
   text-align: center;
 }
 
+/* Scope: this page / folder / all pages */
+.lr-scope {
+  display: flex;
+  padding: 3px;
+  border-radius: 18px;
+  background: var(--lr-surface);
+}
+
+.lr-scope button {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 30px;
+  padding: 4px 10px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 15px;
+  background: none;
+  color: var(--lr-muted);
+  font: 700 12px/1.2 var(--lr-font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.lr-scope button[aria-checked="true"] {
+  background: var(--lr-bg);
+  color: var(--lr-text);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 15%);
+}
+
+/* Confirm before changing several pages */
+.lr-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 2px solid var(--lr-accent);
+  border-radius: var(--lr-radius);
+}
+
+.lr-confirm p {
+  margin: 0;
+}
+
+.lr-confirm div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Pages a link is on */
+.lr-pages {
+  font-size: 12px;
+}
+
+.lr-pages summary {
+  color: var(--lr-muted);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.lr-pages ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.lr-pages li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Tabs */
 .lr-tabs {
   display: flex;
@@ -417,7 +489,12 @@ a.lr-url:hover {
   cursor: pointer;
 }
 
+.lr-scope button:disabled {
+  cursor: not-allowed;
+}
+
 .lr-btn:focus-visible,
+.lr-scope button:focus-visible,
 .lr-tabs button:focus-visible,
 .lr-link-btn:focus-visible {
   outline: 2px solid var(--lr-accent);

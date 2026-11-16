@@ -98,7 +98,8 @@ export function extractLinks(html, ctx) {
     }
     const info = classifyHref(href, ctx);
     byHref.set(href, {
-      id: `l${byHref.size}`,
+      // Relative addresses can point to different pages from different folders.
+      key: info.url ? `${href}|${info.url.href}` : href,
       href,
       text,
       count: 1,

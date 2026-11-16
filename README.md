@@ -16,6 +16,13 @@ A broken link is one of the most common mistakes on a published page, and nothin
 
 ## Features
 
+### What to check
+- **This page:** the page open in Experience Workspace. It's checked as soon as the panel opens, and again as you edit.
+- **Folder:** every page in the open page's folder and its sub-folders. Shown when the page is inside a folder.
+- **All pages:** every page on the site, including nav and footer. Up to 500 pages.
+
+In folder and site scans, each link is listed once with the pages it's on. A fix is applied on every one of those pages. Before Link Rescue changes more than the open page, it asks you to confirm.
+
 ### Links to your own site
 - **Missing page:** suggests the closest matching page (e.g. `/indx` → `/`), or removes the link and keeps the text.
 - **Not published:** the page is only in preview, so readers would get "page not found". Links you to that page so you can publish it.
@@ -74,9 +81,10 @@ When you click a fix, Link Rescue saves the editor and reads the saved page. It 
 
    | title | path | icon | experience |
    |---|---|---|---|
-   | Link Rescue | `https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/link-rescue.html` | `https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/icon.svg` | panel |
+   | Link Rescue | `https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/link-rescue.html` | `https://main--link-rescue--shivanim123.aem.live/tools/link-rescue/icon.svg` | `inline` |
 
-3. Open any page in Experience Workspace and open **Link Rescue**.
+   If the site has no config or no `library` sheet yet, add it with the **+** button next to the sheet tabs. `inline` opens the extension as a side panel next to the page.
+3. Save the config, reload Experience Workspace, open any page and choose **Extensions → Link Rescue**.
 
 Options (add them to the panel address as query parameters):
 
@@ -86,7 +94,7 @@ Options (add them to the panel address as query parameters):
 ## Limits and next steps
 
 - Some websites don't let a browser check their pages (CORS). For those sites, Link Rescue can still tell whether the site is up, but it can't confirm a 404, so the link shows as "Site responds". A small link-check service (for example a Cloudflare Worker) would remove this limit. It would plug into `probe()` in `tools/link-rescue/lib/checks.js`.
-- Possible next steps: check every page on the site, images as well as links, and a scheduled report.
+- Possible next steps: images as well as links, and a scheduled site-wide report.
 
 ## Project structure
 
@@ -102,7 +110,9 @@ tools/link-rescue/
   lib/checks.js      checks each link and suggests fixes
   lib/wayback.js     Wayback Machine integration
   lib/fixes.js       applies a fix to the page HTML
+  lib/site.js        lists and reads pages for folder and site scans
   demo/sample.html   demo page with one example of each problem
+  demo/about.html    second demo page, for folder and site scans
 ```
 
 ## Development
