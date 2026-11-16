@@ -233,8 +233,15 @@ async function fromStatus(href, status, finalUrl) {
     const r = result('warning', 'Server error', `The site returned an error (${status}). It may be down.`);
     return addArchive(r, href, { offer: true });
   }
+  // Many sites (LinkedIn, Google, Stack Overflow, npm…) refuse automated checks: that says nothing
+  // about whether the page works, so these links are "Not checked", not broken.
+  if ([401, 403, 407, 429, 999].includes(status)) {
+    const host = new URL(href).hostname.replace(/^www\./, '');
+    return result('unknown', 'Blocks checks', `${host} refuses automated checks (${status}), so Link Rescue can't tell whether this page works. Open it once to make sure.`);
+  }
   if (status >= 400) {
-    return result('warning', `Error ${status}`, `The site refused the request (${status}). It may need a login.`);
+    const r = result('error', `Error ${status}`, `The page answered with an error (${status}).`);
+    return addArchive(r, href, { offer: true });
   }
   if (finalUrl && !sameAddress(finalUrl, href)) {
     // The link forwards to a page that works, so it works: short links are made to do this.
@@ -265,7 +272,7 @@ async function browserCheck(url, reason) {
     return addArchive(r, href, { offer: true });
   }
   if (p.timeout) {
-    const r = result('warning', 'Timed out', 'The site took too long to answer. It may be down.');
+    const r = result('unknown', 'Timed out', 'The site took too long to answer, so Link Rescue can\'t tell whether this page works. Open it once to make sure.');
     return addArchive(r, href, { offer: true });
   }
   // The site answers, but it hides the page status from the browser: it may still be a 404.
@@ -303,7 +310,7 @@ async function checkExternal(link) {
     return addArchive(r, href, { offer: true });
   }
   if (remote.timedOut) {
-    const r = result('warning', 'Timed out', 'The site took too long to answer. It may be down.');
+    const r = result('unknown', 'Timed out', 'The site took too long to answer, so Link Rescue can\'t tell whether this page works. Open it once to make sure.');
     return addArchive(r, href, { offer: true });
   }
   return browserCheck(url, remote.reason);

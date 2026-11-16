@@ -545,9 +545,9 @@ function icon(name, cls = '') {
   return `<svg class="lr-icon ${cls}" viewBox="0 0 16 16" aria-hidden="true">${ICONS[name]}</svg>`;
 }
 
-// One list of links to fix; each card's badge says what was found (Not found, Old domain, Moved…).
-// Links that couldn't be checked are listed last, with a "Not checked" badge and the reason.
-const TO_FIX = ['error', 'warning', 'unknown'];
+// Broken: confirmed problems, each card's badge says what was found (Not found, Old domain…).
+// Links that couldn't be checked (the site blocks checks or doesn't answer) have their own tab.
+const TO_FIX = ['error', 'warning'];
 const BROKEN_TITLE = 'Broken links';
 
 function counts() {
@@ -589,15 +589,15 @@ function verdict(c) {
     };
   }
   const on = state.scope === 'page' ? '' : ` across ${scopeName()}`;
-  const broken = c.error + c.warning + c.unknown;
+  const broken = c.error + c.warning;
   const unchecked = c.unknown ? ` ${plural(c.unknown, 'link')} couldn't be checked.` : '';
   if (broken) return { cls: 'error', title: `${plural(broken, 'broken link')}${on}`, text: `Fix them before you publish.${unchecked}` };
-  return { cls: 'ok', title: `All links look good${on}`, text: 'Safe to publish.' };
+  return { cls: 'ok', title: `No broken links${on}`, text: c.unknown ? unchecked.trim() : 'Safe to publish.' };
 }
 
-/** The Broken / Working tabs, with their counts. */
+/** The Broken / Working (/ Not checked) tabs, with their counts. */
 function stats(c) {
-  const broken = c.error + c.warning + c.unknown;
+  const broken = c.error + c.warning;
   const tab = (view, cls, label, n) => `
     <button type="button" role="tab" class="lr-stat lr-${cls}${n ? '' : ' lr-zero'}" data-view="${view}" aria-selected="${state.view === view}">
       <span>${label}</span><strong>${n}</strong>
@@ -605,6 +605,7 @@ function stats(c) {
   return `<div class="lr-stats" role="tablist" aria-label="Links">
     ${tab('broken', 'error', 'Broken', broken)}
     ${tab('working', 'ok', 'Working', c.ok)}
+    ${c.unknown ? tab('unchecked', 'unknown', 'Not checked', c.unknown) : ''}
   </div>`;
 }
 
@@ -703,6 +704,18 @@ function groupedList() {
   return `<section class="lr-group lr-error">
     <h2>${icon('error')}${BROKEN_TITLE} <b>${links.length}</b><span>Fix these before you publish</span></h2>
     <div class="lr-list">${links.map((l) => card(l, BROKEN_TITLE)).join('')}</div>
+  </section>`;
+}
+
+/** Links that couldn't be checked: the site blocks checks or doesn't answer. */
+function uncheckedList() {
+  const links = visibleLinks()
+    .filter((l) => resultFor(l)?.severity === 'unknown')
+    .sort((a, b) => b.pages.length - a.pages.length || a.href.localeCompare(b.href));
+  if (!links.length) return '<p class="lr-empty-line">Every link was checked.</p>';
+  return `<section class="lr-group lr-unknown">
+    <h2>${icon('unknown')}Not checked <b>${links.length}</b><span>These may well work: open each one once to make sure</span></h2>
+    <div class="lr-list">${links.map((l) => card(l, 'Not checked')).join('')}</div>
   </section>`;
 }
 
@@ -893,9 +906,11 @@ function renderPanel() {
   const checked = ready && state.links.length && !c.pending;
   const bulk = checked ? bulkItems() : [];
   const scanning = !ready && state.scans[state.scope]?.status !== 'error';
-  const toFix = c.error + c.warning + c.unknown;
+  const toFix = c.error + c.warning;
+  if (state.view === 'unchecked' && !c.unknown && checked) state.view = 'broken';
   let body = '';
   if (checked && state.view === 'working') body = workingList();
+  else if (checked && state.view === 'unchecked') body = uncheckedList();
   else if (checked) body = toFix ? groupedList() : allGood(c);
   else if (scanning || c.pending || (state.scope === 'page' && !state.pageHtml)) body = skeleton();
   app.innerHTML = `

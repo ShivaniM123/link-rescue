@@ -62,11 +62,12 @@ In folder and selected-page scans:
 |---|---|---|
 | **Broken** | The page is gone (404 / 410), including broken short links such as bit.ly. | **The archived copy from the Wayback Machine** or **the site's home page** |
 | **Unreachable** | The site can't be reached. The domain may have shut down. | **The archived copy from the Wayback Machine** |
-| **Timed out** | The site took too long to answer. | The archived copy from the Wayback Machine |
+| **Timed out** | The site took too long to answer. | Listed under **Not checked**, with the archived copy from the Wayback Machine |
 | **Redirects / Short link** | The link forwards to a page that works (e.g. bit.ly). | Not a problem: listed under **Working**, with where it leads |
 | **Not secure** | An `http://` link. Link Rescue checks whether the `https://` version works. | Switch to `https://` |
 | **Server error** | The site answered with a 5xx error. It may be down for now. | The archived copy from the Wayback Machine |
-| **Refused** | The site refused the request (e.g. 401 / 403, it needs a login). | Flagged for review |
+| **Blocks checks** | The site refuses automated checks (401, 403, 429, or LinkedIn's 999), e.g. Google, Stack Overflow, npm. That says nothing about the page itself. | Listed under **Not checked**, so you open it once |
+| **Error 4xx** | Any other error status, e.g. 400. | The archived copy, where there is one |
 
 Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not checked.
 
@@ -96,7 +97,7 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 
 ### 8. Panel experience
 - **Summary card** at the top with an icon and a one-line verdict, for example "4 broken links: fix them before you publish" or "All links look good: safe to publish". Folder and selected-page scans add "across N pages".
-- **Broken / Working tabs** with counts. **Broken** (selected to start with) lists the links to fix; **Working** lists the links that work, with their address and what was found (e.g. Live or Working). The selected tab is highlighted.
+- **Broken / Working / Not checked tabs** with counts. **Not checked** only appears when a site blocked the check or didn't answer in time; those links may well work, so they're never counted as broken. **Broken** (selected to start with) lists the links to fix; **Working** lists the links that work, with their address and what was found (e.g. Live or Working). The selected tab is highlighted.
 - **Apply N safe fixes** button right under the summary.
 - **One Broken links list.** Each card's badge says exactly what was found: Not found, Gone, Unreachable, Timed out, Missing page, Not published, Editor link, Preview link, Old domain, Not secure, Server error, or Not checked (with the reason). The most serious problems come first, then links on the most pages, and fixed links drop off the list straight away.
 - **Compact cards:** link text, a problem badge, the address (opens in a new tab), one short sentence on what's wrong, and the fix buttons.
