@@ -403,13 +403,19 @@ a {
 }
 
 .lr-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   padding: 8px 6px;
   border: 1px solid var(--lr-border);
   border-radius: 8px;
+  background: var(--lr-bg);
+  color: var(--lr-text);
+  font: inherit;
   text-align: center;
 }
 
-.lr-stat dt {
+.lr-stat > span {
   overflow: hidden;
   color: var(--lr-muted);
   font-size: 11px;
@@ -417,17 +423,68 @@ a {
   white-space: nowrap;
 }
 
-.lr-stat dd {
-  margin: 0;
+.lr-stat strong {
   color: var(--tone);
   font-size: 20px;
   font-weight: 800;
   line-height: 1.2;
 }
 
-.lr-stat.lr-zero dd {
+.lr-stat.lr-zero strong {
   color: var(--lr-muted);
   opacity: 0.5;
+}
+
+/* The Working tile shows and hides the working links. */
+button.lr-stat {
+  cursor: pointer;
+}
+
+button.lr-stat:hover:not(:disabled) {
+  border-color: var(--tone);
+  background: var(--tone-bg);
+}
+
+button.lr-stat:disabled {
+  cursor: default;
+}
+
+button.lr-stat em {
+  color: var(--lr-accent);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+button.lr-stat:disabled em {
+  visibility: hidden;
+}
+
+.lr-working {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--lr-border);
+  border-radius: var(--lr-radius);
+  list-style: none;
+}
+
+.lr-working li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--lr-border);
+}
+
+.lr-working li:last-child {
+  border-bottom: 0;
+}
+
+.lr-working p {
+  margin: 0;
 }
 
 /* Buttons */
@@ -848,6 +905,43 @@ a {
   cursor: pointer;
 }
 
+/* "N links couldn't be checked · Show" */
+.lr-verdict .lr-show {
+  margin-left: 4px;
+  color: var(--lr-accent);
+  font-size: 12px;
+}
+
+.lr-unchecked {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lr-unchecked li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgb(255 255 255 / 60%);
+  font-size: 12px;
+}
+
+.lr-unchecked a {
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lr-unchecked span {
+  color: var(--lr-muted);
+}
+
 /* "The page's links changed since the last check" */
 .lr-changed {
   align-items: center;
@@ -875,6 +969,7 @@ a {
 }
 
 .lr-btn:focus-visible,
+button.lr-stat:focus-visible,
 .lr-icon-btn:focus-visible,
 .lr-scope button:focus-visible,
 .lr-link-btn:focus-visible,

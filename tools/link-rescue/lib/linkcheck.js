@@ -66,16 +66,16 @@ export default async function remoteCheck(url) {
   if (cached && Date.now() - cached.at < DAY) return cached.result;
   try {
     const resp = await fetch(`${workerUrl()}/check?${new URLSearchParams({ url })}`, { signal: AbortSignal.timeout(20000) });
-    if (!resp.ok) return { failed: true };
+    if (!resp.ok) return { failed: true, reason: `the link check answered ${resp.status}` };
     const json = await resp.json();
     if (json.timeout) return { timedOut: true };
     let result;
     if (json.status) result = { status: json.status, finalUrl: json.finalUrl || url };
     else if (json.unreachable) result = { unreachable: true };
-    else return { failed: true };
+    else return { failed: true, reason: 'the link check gave no status' };
     remember(url, result);
     return result;
-  } catch {
-    return { failed: true };
+  } catch (e) {
+    return { failed: true, reason: `the link check couldn't be reached (${e.name}: ${e.message})` };
   }
 }

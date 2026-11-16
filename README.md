@@ -96,7 +96,7 @@ Email (`mailto:`), phone (`tel:`) and jump links (`#…`) are listed but not che
 
 ### 8. Panel experience
 - **Summary card** at the top with an icon and a one-line verdict, for example "4 broken links: fix them before you publish" or "All links look good: safe to publish". Folder and selected-page scans add "across N pages".
-- **Stat tiles** for Broken and Working links.
+- **Stat tiles** for Broken and Working links. Click **Working** to list the working links (link text, address and what was found, e.g. Live or Working) below the broken ones; click again to hide them.
 - **Apply N safe fixes** button right under the summary.
 - **One Broken links list.** Each card's badge says exactly what was found: Not found, Gone, Unreachable, Timed out, Missing page, Not published, Editor link, Preview link, Old domain, Moved, Not secure, Server error. The most serious problems come first, then links on the most pages, and fixed links drop off the list straight away.
 - **Compact cards:** link text, a problem badge, the address (opens in a new tab), one short sentence on what's wrong, and the fix buttons.

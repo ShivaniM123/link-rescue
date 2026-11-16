@@ -48,6 +48,10 @@ const state = {
   confirm: null,
   // The link whose "Update link" form is open (by key, which survives re-checks).
   editing: null,
+  // Whether the list of links that couldn't be checked is open.
+  showUnchecked: false,
+  // Whether the working links are listed (the Working tile toggles them).
+  showWorking: false,
   undo: null,
   hold: null,
   error: null,
@@ -593,13 +597,31 @@ function verdict(c) {
 }
 
 function stats(c) {
-  const tiles = [
-    ['error', 'Broken', c.error + c.warning],
-    ['ok', 'Working', c.ok],
-  ];
-  return `<dl class="lr-stats">${tiles.map(([cls, label, n]) => `
-    <div class="lr-stat lr-${cls}${n ? '' : ' lr-zero'}"><dt>${label}</dt><dd>${n}</dd></div>`).join('')}
-  </dl>`;
+  const broken = c.error + c.warning;
+  return `<div class="lr-stats">
+    <div class="lr-stat lr-error${broken ? '' : ' lr-zero'}"><span>Broken</span><strong>${broken}</strong></div>
+    <button type="button" class="lr-stat lr-ok${c.ok ? '' : ' lr-zero'}" data-action="toggle-working" aria-expanded="${state.showWorking}"${c.ok ? '' : ' disabled'}>
+      <span>Working</span><strong>${c.ok}</strong><em>${state.showWorking ? 'Hide' : 'Show'}</em>
+    </button>
+  </div>`;
+}
+
+/** The links that work, listed on request (Working tile). */
+function workingList() {
+  const links = visibleLinks()
+    .filter((l) => resultFor(l)?.severity === 'ok')
+    .sort((a, b) => b.pages.length - a.pages.length || a.href.localeCompare(b.href));
+  if (!links.length) return '';
+  const rows = links.map((l) => `
+    <li>
+      <p class="lr-text">${esc(l.text || '(no link text)')}</p>
+      <a class="lr-url" href="${esc(l.info.url?.href || l.href)}" target="_blank" rel="noopener" title="${esc(l.href)}">${icon('external')}<span>${esc(l.href)}</span></a>
+      <span class="lr-note">${esc(resultFor(l).label)}${l.pages.length > 1 ? ` · on ${plural(l.pages.length, 'page')}` : ''}</span>
+    </li>`).join('');
+  return `<section class="lr-group lr-ok">
+    <h2>${icon('ok')}Working links <b>${links.length}</b></h2>
+    <ul class="lr-working">${rows}</ul>
+  </section>`;
 }
 
 function archiveLine(res) {
@@ -847,6 +869,13 @@ function updatePicker() {
   if (empty) empty.hidden = shown > 0;
 }
 
+/** The links that couldn't be checked, and why. */
+function uncheckedList() {
+  const items = visibleLinks().filter((l) => resultFor(l)?.severity === 'unknown').map((l) => `
+    <li><a href="${esc(l.info.url?.href || l.href)}" target="_blank" rel="noopener">${esc(l.href)}</a><span>${esc(resultFor(l).message)}</span></li>`).join('');
+  return `<ul class="lr-unchecked">${items}</ul>`;
+}
+
 function renderPanel() {
   if (state.error) {
     app.innerHTML = `
@@ -871,7 +900,7 @@ function renderPanel() {
   const scanning = !ready && state.scans[state.scope]?.status !== 'error';
   const toFix = c.error + c.warning;
   let body = '';
-  if (checked) body = toFix ? groupedList() : allGood(c);
+  if (checked) body = (toFix ? groupedList() : allGood(c)) + (state.showWorking ? workingList() : '');
   else if (scanning || c.pending || (state.scope === 'page' && !state.pageHtml)) body = skeleton();
   app.innerHTML = `
     ${header(!state.busy && !c.pending && !scanning)}
@@ -884,7 +913,8 @@ function renderPanel() {
       ${icon(v.cls, 'lr-verdict-icon')}
       <div>
         <strong>${esc(v.title)}</strong>
-        ${v.text ? `<span>${esc(v.text)}</span>` : ''}
+        ${v.text ? `<span>${esc(v.text)}${checked && c.unknown ? ` <button type="button" class="lr-link-btn lr-show" data-action="toggle-unchecked" aria-expanded="${state.showUnchecked}">${state.showUnchecked ? 'Hide' : 'Show'}</button>` : ''}</span>` : ''}
+        ${checked && c.unknown && state.showUnchecked ? uncheckedList() : ''}
         ${v.progress !== undefined ? `<div class="lr-progress"><span style="width:${Math.round(v.progress * 100)}%"></span></div>` : ''}
       </div>
     </section>
@@ -916,6 +946,14 @@ app.addEventListener('click', (e) => {
   }
   const action = e.target.closest('[data-action]')?.dataset.action;
   if (action === 'recheck') recheck();
+  if (action === 'toggle-working') {
+    state.showWorking = !state.showWorking;
+    render();
+  }
+  if (action === 'toggle-unchecked') {
+    state.showUnchecked = !state.showUnchecked;
+    render();
+  }
   if (action === 'pick-open') openPicker();
   if (action === 'pick-check') checkPicked();
   if (action === 'pick-cancel') {

@@ -174,21 +174,29 @@ const EDS_HOST = /^([a-z0-9-]+)--([a-z0-9-]+)--([a-z0-9-]+)\.(?:hlx|aem)\.(page|
  * (`branch--site--org.aem.page` / `.aem.live`).
  * @returns {Promise<boolean|null>} true / false, or null when it can't tell
  */
+// Why an Edge Delivery status check failed, by address (shown with "couldn't be checked").
+const edsProblems = new Map();
+
 async function edsPageExists(url) {
   const m = url.hostname.match(EDS_HOST);
   if (!m) return null;
   const [, ref, site, org, tier] = m;
+  edsProblems.delete(url.href);
   try {
     const resp = await fetch(`https://admin.hlx.page/status/${org}/${site}/${ref}${toWebPath(url.pathname)}`, {
       credentials: 'omit', signal: AbortSignal.timeout(TIMEOUT),
     });
     if (resp.status === 404) return false;
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      edsProblems.set(url.href, `Edge Delivery status answered ${resp.status}`);
+      return null;
+    }
     const json = await resp.json();
     const status = tier === 'live' ? json.live?.status : json.preview?.status;
     if (status === 200) return true;
     return status === 404 ? false : null;
-  } catch {
+  } catch (e) {
+    edsProblems.set(url.href, `Edge Delivery status couldn't be reached (${e.name}: ${e.message})`);
     return null;
   }
 }
@@ -272,7 +280,7 @@ async function checkExternal(link) {
   }
   // The site answers, but it hides the page status from the browser: it may still be a 404.
   return addArchive(
-    result('unknown', 'Not confirmed', `${url.hostname} hides page status from the browser, and the link check couldn't be reached. Open it once to check.`),
+    result('unknown', 'Not confirmed', `${url.hostname} hides page status from the browser, and ${[edsProblems.get(href), remote.reason].filter(Boolean).join('; ') || 'the link check failed'}.`),
     href,
     { offer: false },
   );
